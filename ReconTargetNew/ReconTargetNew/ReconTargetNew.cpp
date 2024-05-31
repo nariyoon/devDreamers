@@ -17,11 +17,15 @@
 #if  defined(_WIN32) || defined(_WIN64)
 #pragma comment(lib,"Shlwapi.lib")
 #ifdef _DEBUG
-#pragma comment(lib,"..\\..\\..\\opencv\\build\\x64\\vc16\\lib\\opencv_world490d.lib")
-#pragma comment(lib,"..\\tflite-dist\\libs\\windows_x86_64\\tensorflowlite_c.dll.if.lib")
+//#pragma comment(lib,"..\\..\\..\\opencv\\build\\x64\\vc16\\lib\\opencv_world490d.lib")
+//#pragma comment(lib,"..\\tflite-dist\\libs\\windows_x86_64\\tensorflowlite_c.dll.if.lib")
+#pragma comment(lib,"C:\\opencv\\build\\x64\\vc16\\lib\\opencv_world490d.lib")
+#pragma comment(lib,"C:\\tflite-dist\\tflite-dist\\libs\\windows_x86_64\\tensorflowlite_c.dll.if.lib")
 #else
-#pragma comment(lib,"..\\..\\..\\opencv\\build\\x64\\vc16\\lib\\opencv_world490.lib")
-#pragma comment(lib,"..\\tflite-dist\\libs\\windows_x86_64\\tensorflowlite_c.dll.if.lib")
+//#pragma comment(lib,"..\\..\\..\\opencv\\build\\x64\\vc16\\lib\\opencv_world490.lib")
+//#pragma comment(lib,"..\\tflite-dist\\libs\\windows_x86_64\\tensorflowlite_c.dll.if.lib")
+#pragma comment(lib,"C:\\opencv\\build\\x64\\vc16\\lib\\opencv_world490.lib")
+#pragma comment(lib,"C:\\tflite-dist\\libs\\windows_x86_64\\tensorflowlite_c.dll.if.lib")
 #endif
 #endif
 

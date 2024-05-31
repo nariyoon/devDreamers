@@ -1,6 +1,6 @@
-﻿  Generating code
-  0 of 286 functions ( 0.0%) were compiled, the rest were copied from previous compilation.
-    0 functions were new in current compilation
-    0 functions had inline decision re-evaluated but remain unchanged
-  Finished generating code
-  ReconTargetNew.vcxproj -> C:\Users\dplakosh\Desktop\LG2024\LgCannonDemoCodeDist\ReconTargetNew\x64\Release\ReconTargetNew.exe
+﻿  CvImageMatch.cpp
+  ObjectDetector.cpp
+  ReconTargetNew.cpp
+D:\00.SwArchitect\02.CMUProject\02.Project\LgCannonDemoCodeDistv3.4\LgCannonDemoCodeDist\Common\CvImageMatch.cpp(8,10): error C1083: 포함 파일을 열 수 없습니다. 'opencv2/core/core.hpp': No such file or directory
+D:\00.SwArchitect\02.CMUProject\02.Project\LgCannonDemoCodeDistv3.4\LgCannonDemoCodeDist\Common\ObjectDetector.h(3,10): error C1083: 포함 파일을 열 수 없습니다. 'opencv2/core.hpp': No such file or directory
+D:\00.SwArchitect\02.CMUProject\02.Project\LgCannonDemoCodeDistv3.4\LgCannonDemoCodeDist\ReconTargetNew\ReconTargetNew\ReconTargetNew.cpp(8,10): error C1083: 포함 파일을 열 수 없습니다. 'opencv2/core/core.hpp': No such file or directory
