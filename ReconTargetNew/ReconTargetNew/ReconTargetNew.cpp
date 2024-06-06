@@ -104,19 +104,23 @@ int main(int /*argc*/, char** /*argv*/)
 	else
 	{
 		printf("TensorFlow Lite Mode\n");
-		detector = new ObjectDetector("../../../TfLite-2.17/Data/detect.tflite", false);
+		// detector = new ObjectDetector("../../../TfLite-2.17/Data/detect.tflite", false);
+		detector = new ObjectDetector("Images\\detect.tflite", false);
 	}
 	char Filename[1024];
 	char PathFile[1024];
-	char Path[] = "../../";
-	char Folder[] = "images";
+	// char Path[] = "../../";
+	char Path[] = ""; //  "..\\..\\";
+	char Folder[] = "Images";
 	char ext[] = "jpg";
 
 	int count = 1;
 	while (1)
 	{
 		sprintf_s(Filename, "Capture%d", count);
-		sprintf_s(PathFile, "%s%s/%s.%s", Path, Folder, Filename,ext);
+		// sprintf_s(PathFile, "%s%s/%s.%s", Path, Folder, Filename,ext);
+		// sprintf_s(PathFile, "%s%s\\%s.%s", Path, Folder, Filename, ext);
+		sprintf_s(PathFile, "%s\\%s.%s", Folder, Filename, ext);
 
 		Mat image = imread(PathFile, 1);
 		if (image.empty())
