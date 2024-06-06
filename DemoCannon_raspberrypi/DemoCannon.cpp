@@ -31,9 +31,30 @@ static TRunMode RunMode = NONE;
 
 int main(int /*argc*/, char** /*argv*/)
 {
-	char in;
-
-			RunMode = USE_TENSORFLOW_LITE;
+	string in;
+	while (1)
+	{
+	        printf("\nEnter Mode (I)mage Match or (T)ensorFLow Lite (E)xit :");
+	        cin >> in;
+		if ((in == "i") || (in == "I"))
+	        {
+	                RunMode = USE_IMAGE_MATCH;
+	                break;
+	        }
+	        else if ((in == "t") || (in == "T"))
+	        {
+	                RunMode = USE_TENSORFLOW_LITE;
+	                break;
+	        }
+	        else if ((in == "e") || (in == "E"))
+	        {
+	                return(0);
+	        }
+	        else
+	        {
+	                printf("[dev] Invalid Value\n");
+	        }
+	}
 
 	if (RunMode == USE_IMAGE_MATCH)
 	{
@@ -49,6 +70,7 @@ int main(int /*argc*/, char** /*argv*/)
 		printf("TensorFlow Lite Mode\n");
 		detector = new ObjectDetector("../TfLite-2.17/Data/detect.tflite", false);
 	}
+
 	char Filename[1024];
 	char PathFile[1024];
 	char Path[] = "./";
@@ -98,16 +120,17 @@ int main(int /*argc*/, char** /*argv*/)
 			}
 			delete[] res;
 		}
+
 		resize(image, image, Size(image.cols / 2, image.rows / 2));
 		char name[1024];
 		sprintf(name, "./images/result_image%d.jpg", count);
+		printf("Save dectecting image %s\n", name);
     		cv::imwrite(name, image);
-#if 1
-		printf("before wait\n");
+
 		int c = waitKey();
-		if ((char)c == 27) break;
-		printf("after wait\n");
-#endif
+		if ((char)c == 27)
+			break;
+		
 		count++;
 	}
 
