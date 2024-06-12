@@ -1,0 +1,22 @@
+VisionComm/
+│
+├── README.md
+├── requirements.txt
+├── setup.py
+├── .gitignore
+├── src/
+│   ├── __init__.py
+│   ├── common.py
+│   ├── image_process.py
+│   ├── cmd.py
+│   ├── tcp_protocol.py
+│   └── image_algo/
+│       ├── __init__.py
+│       ├── tensorflow_algo.py
+│       └── opencv_algo.py
+├── tests/
+│   ├── __init__.py
+│   ├── test_image_process.py
+│   └── test_tcp_protocol.py
+└── scripts/
+    └── run.py
