@@ -1,5 +1,4 @@
 # tcp_protocol.py
-from ctypes import sizeof
 import socket
 import struct
 import errno
@@ -41,18 +40,16 @@ def tcp_ip_thread():
         print("Failed to connect to server:", e)
         exit()
 
+    cv2.namedWindow("camera", cv2.WINDOW_NORMAL)
     while True:
         try:
             # Receive the message header
-            print("waiting the message !!!")
             header_data = clientSock.recv(8)
             if len(header_data) != struct.calcsize('II'):
                 print("Connection lost.")
                 break
 
             # Unpack the message header
-            print("recive header !!")
-            print("header_data", len(header_data))
             len_, type_ = struct.unpack('II', header_data)
             len_ = socket.ntohl(len_)
             type_ = socket.ntohl(type_)
@@ -73,15 +70,11 @@ def tcp_ip_thread():
                 bytes_received += len(chunk)
 
             # Check if all expected bytes have been received
-            print("bytes_received !!", bytes_received, len_)
             if bytes_received != len_:
                 # Handle incomplete message reception
                 pass
 
             # Receive the message body
-            print("recieve body !!")
-            #body_data = clientSock.recv(len_)
-            print("data len_", bytes_received, len_)
             #if len(body_data) != len_:
             #    print("Connection lost.")
             #    break
@@ -89,10 +82,9 @@ def tcp_ip_thread():
             if type_ == MT_IMAGE:
                 # Process the received message based on its typeSsizeof(TMesssageHeader)), cv::IMREAD_COLOR, &ImageIn);
                 imageMat = cv2.imdecode(np.frombuffer(buffer, dtype=np.uint8), cv2.IMREAD_COLOR)
-                ip.recvCameraImage(imageMat)
-                #cv2.imshow('Decoded Image', imageMat)
-                #cv2.waitKey(0)
-                #cv2.destroyAllWindows()
+                #ip.recvCameraImage(imageMat)
+                cv2.imshow('camera', imageMat)
+                cv2.waitKey(1)
             else:
                 print("bypass to UI")
                 #sendToUi
@@ -104,5 +96,6 @@ def tcp_ip_thread():
                 print("Connection lost:", str(e))
             break
 
+    cv2.destroyAllWindows()
     print("Network Thread Exit")
     return None
