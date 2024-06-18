@@ -82,9 +82,9 @@ class KNNDetector:
             # 사각형 그리기
             # cv2.polylines(draw_image, [sq], True, (0, 255, 0), 2)
             label = f"Digit: {recognized_digit}"
-            label_size, baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
+            # label_size, baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
             # cv2.rectangle(draw_image, (x, y - label_size[1] - 10), (x + label_size[0], y), (0, 255, 0), cv2.FILLED)
-            cv2.putText(draw_image, label, (x, y - 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+            # cv2.putText(draw_image, label, (x, y - 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
         return recognized_digits
 

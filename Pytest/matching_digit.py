@@ -43,9 +43,9 @@ def match_digits(image, draw_image, squares, ref_images):
         # 숫자 추가
         if recognized_digit is not None:
             label = f"Digit: {recognized_digit}"
-            label_size, baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
+            # label_size, baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
             # cv2.rectangle(draw_image, (x, y - label_size[1] - 10), (x + label_size[0], y), (0, 0, 255), cv2.FILLED)
-            cv2.putText(draw_image, label, (x, y - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+            # cv2.putText(draw_image, label, (x, y - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
         matched_squares.append((sq, recognized_digit))  # 사각형과 인식된 숫자 저장
 

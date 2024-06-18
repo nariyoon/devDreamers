@@ -57,10 +57,10 @@ class ObjectDetector:
                 ymin = int(ymin * height)
                 ymax = int(ymax * height)
 
-                label = f"Digit: {classes[i]}: {int(scores[i] * 100)}%"
-                label_size, baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
-                label_ymin = max(ymin, label_size[1] + 10)
-                cv2.putText(draw_image, label, (xmin, label_ymin), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
+                # label = f"Digit: {classes[i]}: {int(scores[i] * 100)}%"
+                # label_size, baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
+                # label_ymin = max(ymin, label_size[1] + 10)
+                # cv2.putText(draw_image, label, (xmin, label_ymin), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
                 
                 result.append(([(xmin, ymin), (xmax, ymax)], classes[i]))
 

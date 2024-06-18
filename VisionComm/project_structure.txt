@@ -8,7 +8,7 @@ VisionComm/
 │   ├── __init__.py
 │   ├── common.py
 │   ├── image_process.py
-│   ├── cmd.py
+│   ├── command.py
 │   ├── tcp_protocol.py
 │   └── image_algo/
 │       ├── __init__.py

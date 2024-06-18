@@ -14,6 +14,7 @@ from matching_digit import *
 from knn_test import *
 from tensorflow_test import *
 from tesseract_test import *
+from yolo_test import *
 
 class Algorithm:
     def run(self, image, draw_image):
@@ -28,18 +29,30 @@ class OpenCVDefaultAlgorithm(Algorithm):
         squares_time = time.time()
         result = match_digits(image, draw_image, squares, self.symbols)
         end_time = time.time()
-        return result, (end_time - start_time), (squares_time - start_time)
+        return result, (end_time - start_time), 0
+
 class KNNAlgorithm(Algorithm):
     def __init__(self, model_path):
         self.model = KNNDetector(knn_model_path=model_path)
-
     def run(self, image, draw_image):
         start_time = time.time()
         squares = find_squares(image)
         squares_time = time.time()
         result = self.model.recognize_digits(image, draw_image, squares)
         end_time = time.time()
-        return result, (end_time - start_time), (squares_time - start_time)
+        return result, (end_time - start_time), 0
+
+class YOLOAlgorithm(Algorithm):
+    def __init__(self, model_path):
+        self.model = YOLO_Detector(model_path=model_path)
+
+    def run(self, image, draw_image):
+        start_time = time.time()
+        result, _ = self.model.detect(image, draw_image)
+        end_time = time.time()
+        return result, (end_time - start_time), 0
+
+
 class TFLiteAlgorithm(Algorithm):
     def __init__(self, model_path):
         self.model = ObjectDetector(model_path=model_path)
@@ -49,6 +62,9 @@ class TFLiteAlgorithm(Algorithm):
         result, _ = self.model.detect(image, draw_image)
         end_time = time.time()
         return result, (end_time - start_time), 0
+    
+
+
 class PytesseractAlgorithm(Algorithm):
     def __init__(self):
         self.model = Pytesseract()
@@ -135,6 +151,13 @@ def manual_label(image, matched_squares):
             return False, manual_squares
 
     cv2.destroyAllWindows()
+
+import os
+import cv2
+import json
+from ultralytics import YOLO
+import glob
+
 def process_images(algorithms, auto_generate=True, labeling_mode=False):
     script_dir = os.path.dirname(os.path.realpath(__file__))
     image_dir = f"{script_dir}/dataset/NewTrainingRaw/images"
@@ -156,13 +179,14 @@ def process_images(algorithms, auto_generate=True, labeling_mode=False):
     frame_cnt = 0
 
     # Load ground truth labels
-    label_file = f"{script_dir}/NewTrainingRaw_labels.json"
+    label_file = f"{script_dir}/NewTrainingRaw_labels_updated.json"
     with open(label_file, 'r') as f:
         ground_truth_data = json.load(f)
 
     def get_ground_truth(image_file):
+        file_name = os.path.basename(image_file)
         for image_data in ground_truth_data["images"]:
-            if image_data["file"] == image_file:
+            if image_data["file"] == file_name:
                 return [ann for ann in image_data["annotations"] if ann["label"] != -1]
         return []
 
@@ -182,6 +206,7 @@ def process_images(algorithms, auto_generate=True, labeling_mode=False):
 
         for algorithm in algorithms:
             result, exec_time, squares_time = algorithm.run(frame_0, draw_frame)
+            print(f"ALGO {algorithm.__class__.__name__} time {exec_time}")
             times[algorithm.__class__.__name__].append(exec_time)
             counts[algorithm.__class__.__name__].append(len(result) if not isinstance(result, int) else result)
 
@@ -275,6 +300,9 @@ def process_images(algorithms, auto_generate=True, labeling_mode=False):
     cv2.destroyAllWindows()
 
     return times, counts, detected_counts, correct_counts, error_counts, error_detect_counts
+
+
+
 def load_ref_images(image_dir, num_signs, scale=0.50):
     symbols = []
     for i in range(num_signs):
@@ -287,29 +315,28 @@ def load_ref_images(image_dir, num_signs, scale=0.50):
         _, img = cv2.threshold(img, 100, 255, cv2.THRESH_BINARY)
         symbols.append({"img": img, "name": str(i)})
     return symbols
-
-from tabulate import tabulate
-import matplotlib.pyplot as plt
 import numpy as np
+import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
+from tabulate import tabulate
 
 def plot_results(times, counts, detected_counts, correct_counts, error_counts, error_detect_counts):
-    fig, axs = plt.subplots(2, 1, figsize=(12, 12))
+    fig, axs = plt.subplots(2, 1, figsize=(12, 10))
     x = list(range(len(next(iter(times.values())))))
 
-    # Plot times
+    # Plot processing times
     for alg_name, alg_times in times.items():
         mean_time = np.mean(alg_times)
         std_time = np.std(alg_times)
-        axs[0].plot(x, alg_times, label=f'{alg_name} (mean: {mean_time:.2f}, std: {std_time:.2f})')
+        axs[0].plot(x, alg_times, label=f'{alg_name} (mean: {mean_time:.2f}s, std: {std_time:.2f}s)')
     axs[0].set_xlabel('Image Index')
     axs[0].set_ylabel('Time (seconds)')
     axs[0].set_title('Processing Time for Different Methods')
     axs[0].legend()
     axs[0].grid(True)
-    axs[0].xaxis.set_major_locator(MaxNLocator(integer=True))  # x축을 정수로 표시
+    axs[0].xaxis.set_major_locator(MaxNLocator(integer=True))
 
-    # Plot counts
+    # Plot detected counts
     for alg_name, alg_counts in counts.items():
         mean_count = np.mean(alg_counts)
         std_count = np.std(alg_counts)
@@ -319,7 +346,7 @@ def plot_results(times, counts, detected_counts, correct_counts, error_counts, e
     axs[1].set_title('Detected Counts for Different Methods')
     axs[1].legend()
     axs[1].grid(True)
-    axs[1].xaxis.set_major_locator(MaxNLocator(integer=True))  # x축을 정수로 표시
+    axs[1].xaxis.set_major_locator(MaxNLocator(integer=True))
 
     plt.tight_layout()
     plt.show()
@@ -335,15 +362,6 @@ def plot_results(times, counts, detected_counts, correct_counts, error_counts, e
         total_errors = np.sum(error_counts[alg_name])
         total_error_detect = np.sum(error_detect_counts[alg_name])
         
-        mean_detected = np.mean(detected_counts[alg_name])
-        std_detected = np.std(detected_counts[alg_name])
-        mean_correct = np.mean(correct_counts[alg_name])
-        std_correct = np.std(correct_counts[alg_name])
-        mean_errors = np.mean(error_counts[alg_name])
-        std_errors = np.std(error_counts[alg_name])
-        mean_error_detect = np.mean(error_detect_counts[alg_name])
-        std_error_detect = np.std(error_detect_counts[alg_name])
-
         detected_percentage = (total_detected / total_gt_labels) * 100
         correct_percentage = (total_correct / total_detected) * 100 if total_detected > 0 else 0
         error_percentage = (total_errors / total_detected) * 100 if total_detected > 0 else 0
@@ -351,18 +369,14 @@ def plot_results(times, counts, detected_counts, correct_counts, error_counts, e
 
         summary_data.append([
             alg_name,
-            total_detected, f"{mean_detected:.2f}", f"{std_detected:.2f}", f"{detected_percentage:.2f}%",
-            total_correct, f"{mean_correct:.2f}", f"{std_correct:.2f}", f"{correct_percentage:.2f}%",
-            total_errors, f"{mean_errors:.2f}", f"{std_errors:.2f}", f"{error_percentage:.2f}%",
-            total_error_detect, f"{mean_error_detect:.2f}", f"{std_error_detect:.2f}", f"{error_detect_percentage:.2f}%"
+            f"{total_detected}", f"{total_correct}", f"{total_errors}", f"{total_error_detect}",
+            f"{detected_percentage:.2f}%", f"{correct_percentage:.2f}%", f"{error_percentage:.2f}%", f"{error_detect_percentage:.2f}%"
         ])
 
     headers = [
         "Algorithm",
-        "Total Detected", "Mean Detected", "Std Detected", "Detected %",
-        "Total Correct", "Mean Correct", "Std Correct", "Correct %",
-        "Total Errors", "Mean Errors", "Std Errors", "Errors %",
-        "Total Error Detect", "Mean Error Detect", "Std Error Detect", "Error Detect %"
+        "Total Detected", "Total Correct", "Total Errors", "Total Error Detect",
+        "Detected %", "Correct %", "Errors %", "Error Detect %"
     ]
 
     print(tabulate(summary_data, headers=headers, tablefmt='pretty'))
@@ -381,7 +395,7 @@ def plot_results(times, counts, detected_counts, correct_counts, error_counts, e
     plt.tight_layout()
     plt.show()
 
-# Example usage:
+# Example usage
 # plot_results(times, counts, detected_counts, correct_counts, error_counts, error_detect_counts)
 
 
@@ -393,12 +407,13 @@ if __name__ == "__main__":
 
     algorithms = [
         OpenCVDefaultAlgorithm(symbols),
-        KNNAlgorithm(f"{script_dir}/knn_train_data.pkl"),
+        # KNNAlgorithm(f"{script_dir}/knn_train_data.pkl"),
         TFLiteAlgorithm(f"{script_dir}/../TfLite-2.17/Data/detect.tflite"),
+        YOLOAlgorithm(f"{script_dir}/../VisionComm/src/image_algo/models/best.pt"),
         # PytesseractAlgorithm()
     ]
 
-    auto_generate = False  # True for automatic processing, False for manual processing
+    auto_generate = True  # True for automatic processing, False for manual processing
     labeling_mode = False  # True for labeling mode
     times, counts, detected_counts, correct_counts, error_counts, error_detect_counts = process_images(algorithms, auto_generate, labeling_mode)
     plot_results(times, counts, detected_counts, correct_counts, error_counts, error_detect_counts)

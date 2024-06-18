@@ -5,6 +5,7 @@ import errno
 import cv2
 import numpy as np
 import image_process as ip
+from queue import Queue, Full
 #from cmd import handle_command
 
 # Define message types
@@ -16,6 +17,9 @@ MT_PREARM = 5
 MT_STATE = 6
 MT_STATE_CHANGE_REQ = 7
 MT_CALIB_COMMANDS = 8
+# testtest
+CAP_PROP_FRAME_WIDTH = 1920
+CAP_PROP_FRAME_HEIGHT = 1080
 
 # Define message structures
 class TMesssageHeader:
@@ -25,15 +29,14 @@ class TMesssageHeader:
 
 clientSock = 0
 
-def tcp_ip_thread():
+def tcp_ip_thread(frame_queue):
     """
     This thread handles TCP/IP communication with the Raspberry Pi.
     """
     print("start receiving image thread")
     host = '192.168.0.224'  # Localhost for testing, change to Raspberry Pi IP
-    port = 5000             # Port to listen on
+    port = 5001  # Port to listen on
 
-    global clientSock
     serverAddress = (host, port)
     clientSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
@@ -43,7 +46,6 @@ def tcp_ip_thread():
         print("Failed to connect to server:", e)
         exit()
 
-    cv2.namedWindow("camera", cv2.WINDOW_NORMAL)
     while True:
         try:
             # Receive the message header
@@ -56,12 +58,12 @@ def tcp_ip_thread():
             len_, type_ = struct.unpack('II', headerData)
             len_ = socket.ntohl(len_)
             type_ = socket.ntohl(type_)
-            #print("header len_ ", len_, "header type_ ", type_)
+            # print("header len_ ", len_, "header type_ ", type_)
 
             if type_ == MT_IMAGE:
                 # Buffer to store the received message
                 buffer = bytearray(len_)
-                #print("buffer lenn ", len(buffer))
+                # print("buffer lenn ", len(buffer))
 
                 # Receive data into the buffer
                 bytesReceived = 0
@@ -70,27 +72,42 @@ def tcp_ip_thread():
                     if not chunk:
                         # Handle error or connection closed
                         break
-                    buffer[bytesReceived:] = chunk
+                    buffer[bytesReceived:bytesReceived + len(chunk)] = chunk
                     bytesReceived += len(chunk)
 
                 # Check if all expected bytes have been received
                 if bytesReceived != len_:
-                    pass
+                    continue
 
-                # Receive the message body
-                #if len(body_data) != len_:
-                #    print("Connection lost.")
-                #    break
-
-                # Process the received message based on its typeSsizeof(TMesssageHeader)), cv::IMREAD_COLOR, &ImageIn);
+                # 이미지를 디코딩
                 imageMat = cv2.imdecode(np.frombuffer(buffer, dtype=np.uint8), cv2.IMREAD_COLOR)
+
+                # 이미지 크기 확인 (옵션: 필요에 따라 제한 설정)
+                height, width = imageMat.shape[:2]
+                print(f"height {height} width {width}")
+
+                # 이미지 크기 조정 (다른 곳에서 사용하는 포맷과 동일하게)
+                imageMat = cv2.resize(imageMat, (CAP_PROP_FRAME_WIDTH, CAP_PROP_FRAME_HEIGHT))
+
+                
+                # Put the image into the queue (if image size is valid)
+                try:
+                    frame_queue.put(imageMat, timeout=2)
+                except Full:
+                    print("Queue is full. Discarding oldest frame.")
+                    frame_queue.get()
+                    frame_queue.put(imageMat)
+
                 cv2.imshow('camera', imageMat)
-                cv2.waitKey(1)
+                key = cv2.waitKey(1)
+                if key & 0xFF == ord('q'):
+                    break
+
             else:
                 print("bypass to UI")
                 msg = clientSock.recv(512)
                 sendMsgToUI(msg)
-                #sendToUi
+                # sendToUi
 
         except socket.error as e:
             if e.errno == errno.ECONNRESET:
@@ -98,10 +115,10 @@ def tcp_ip_thread():
             else:
                 print("Connection lost:", str(e))
             break
-
     cv2.destroyAllWindows()
     clientSock.close()
     print("Network Thread Exit")
+
 
 def sendMsgToCannon(msg):
     print("recieve the msg. from UI for sending msg. to cannon(len: ", len(msg), ")")

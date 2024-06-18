@@ -1,19 +1,19 @@
 import threading
-from image_process import image_processing_thread
+from queue import Queue
 from tcp_protocol import tcp_ip_thread
+from image_process import start_image_processing
 
 def main():
-    # Image processing thread
-    img_thread = threading.Thread(target=image_processing_thread)
-    # TCP/IP communication thread
-    tcp_thread = threading.Thread(target=tcp_ip_thread)
+    frame_queue = Queue(maxsize=20)
 
-    # Start threads
-    img_thread.start()
+    # TCP/IP 스레드 실행
+    tcp_thread = threading.Thread(target=tcp_ip_thread, args=(frame_queue,))
     tcp_thread.start()
 
-    # Join threads to ensure they complete before main thread exits
-    img_thread.join()
+    # 이미지 처리 함수 호출
+    start_image_processing(frame_queue)
+
+    # 스레드가 완료될 때까지 대기
     tcp_thread.join()
 
 if __name__ == "__main__":
