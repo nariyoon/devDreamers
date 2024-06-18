@@ -1,1 +1,0 @@
-rm tflite-c-api
