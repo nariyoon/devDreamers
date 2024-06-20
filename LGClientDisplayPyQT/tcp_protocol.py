@@ -74,13 +74,6 @@ def tcp_ip_thread(frame_queue, ip, port):
                 # Buffer to store the received message
                 buffer = bytearray(len_)
 
-                # TODO: send image to ui when manual mode
-                format_string = f'II{len(buffer)}s'
-                msg_len = len_
-                msg_type = MT_IMAGE
-                packed_data = struct.pack(format_string, msg_len, msg_type, buffer)
-                sendMsgToUI(packed_data)
-
                 # Receive data into the buffer
                 bytesReceived = 0
                 while bytesReceived < len_:
@@ -94,6 +87,13 @@ def tcp_ip_thread(frame_queue, ip, port):
                 # Check if all expected bytes have been received
                 if bytesReceived != len_:
                     continue
+
+                # TODO: send image to ui when manual mode
+                format_string = f'II{len(buffer)}s'
+                msg_len = len_
+                msg_type = MT_IMAGE
+                packed_data = struct.pack(format_string, msg_len, msg_type, buffer)
+                sendMsgToUI(packed_data)
 
                 # 이미지를 디코딩
                 imageMat = cv2.imdecode(np.frombuffer(buffer, dtype=np.uint8), cv2.IMREAD_COLOR)
