@@ -12,6 +12,7 @@
 #define MT_STATE                 6
 #define MT_STATE_CHANGE_REQ      7
 #define MT_CALIB_COMMANDS        8
+#define MT_TARGET_DIFF           9
 
 #define PAN_LEFT_START  0x01
 #define PAN_RIGHT_START 0x02
@@ -103,6 +104,14 @@ typedef struct
     TMesssageHeader Hdr;
     unsigned char  Commands;
 } TMesssageCalibCommands;
+
+typedef struct
+{
+    TMesssageHeader Hdr;
+    int target;
+    float Pan;
+    float Tilt;
+} TMesssageNextTargetDiff;
 
 #endif
 //------------------------------------------------------------------------------------------------
