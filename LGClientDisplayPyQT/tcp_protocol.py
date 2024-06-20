@@ -73,24 +73,34 @@ def tcp_ip_thread(frame_queue, ip, port):
     """
     This thread handles TCP/IP communication with the Raspberry Pi.
     """
-    print("start receiving image thread")
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as clientSock:
-            clientSock.connect((ip, port))
-    except Exception as e:
-        print(f"TCP/IP thread encountered an error: {e}")
+    print("start receiving image thread: ", ip, "(", port, ")")
+#    try:
+#        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as clientSock:
+#            clientSock.connect((ip, port))
+#    except Exception as e:
+#        print(f"TCP/IP thread encountered an error: {e}")
         
         # Test Image function call
-        with open('c:\\test.jpg', 'rb') as f:
-            image_data = f.read()
+#        with open('./test.jpg', 'rb') as f:
+#            image_data = f.read()
         # 포맷 문자열을 정의합니다: 'II'는 두 개의 integer, 'I'는 바이트 배열의 길이를 나타내는 integer, f'{len(byte_array)}s'는 가변 길이의 바이트 배열
-        format_string = f'II{len(image_data)}s'
-        # struct.pack을 사용하여 데이터를 패킹합니다.
-        msg_len = len(image_data)
-        msg_type = 3  # MT_IMAGE
-        packed_data = struct.pack(format_string, msg_len, msg_type, image_data)
-        sendMsgToUI(packed_data)
+#        format_string = f'II{len(image_data)}s'
+#        # struct.pack을 사용하여 데이터를 패킹합니다.
+#        msg_len = len(image_data)
+#        msg_type = 3  # MT_IMAGE
+#        packed_data = struct.pack(format_string, msg_len, msg_type, image_data)
+#        sendMsgToUI(packed_data)
 
+#        exit()
+
+    global clientSock
+    serverAddress = (ip, port)
+    clientSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+    try:
+        clientSock.connect(serverAddress)
+    except socket.error as e:
+        print("Failed to connect to server:", e)
         exit()
 
     while True:
@@ -130,8 +140,8 @@ def tcp_ip_thread(frame_queue, ip, port):
                 imageMat = cv2.imdecode(np.frombuffer(buffer, dtype=np.uint8), cv2.IMREAD_COLOR)
 
                 # 이미지 크기 확인 (옵션: 필요에 따라 제한 설정)
-                height, width = imageMat.shape[:2]
-                print(f"height {height} width {width}")
+                #height, width = imageMat.shape[:2]
+                #print(f"height {height} width {width}")
 
                 # 이미지 크기 조정 (다른 곳에서 사용하는 포맷과 동일하게)
                 imageMat = cv2.resize(imageMat, (CAP_PROP_FRAME_WIDTH, CAP_PROP_FRAME_HEIGHT))
@@ -151,7 +161,9 @@ def tcp_ip_thread(frame_queue, ip, port):
 
             else:
                 print("bypass to UI")
+                print("len_ ", len_, "header type_ ", type_)
                 msg = clientSock.recv(512)
+                #msg = clientSock.recv(len_ + len(headerData))
                 sendMsgToUI(msg)
                 # sendToUi
 
@@ -166,17 +178,17 @@ def tcp_ip_thread(frame_queue, ip, port):
     print("Network Thread Exit")
 
 def sendMsgToCannon(msg):
-    print("recieve the msg. from UI for sending msg. to cannon(len: ", len(msg), ")")
     global clientSock
-    type = msg[4:7]
-    type = int.from_bytes(type, byteorder='little', signed=True)
+    type = msg[4:8]
+    typeInt = int.from_bytes(type, byteorder='big')
 
-    if type == MT_TARGET_SEQUENCE:
+    print("recieve the msg. from UI for sending msg. to cannon( ", msg, "len: ", len(msg), "type: ", typeInt, ")")
+    if typeInt == MT_TARGET_SEQUENCE:
         # send to image process
         print("type is MT_TARGET_SEQUENCE")
-    elif type == MT_COMMANDS:
+    elif typeInt == MT_COMMANDS:
         # send to command process
-        print("type is MT_COMMANDS", type)
+        print("type is MT_COMMANDS")
         clientSock.sendall(msg)
     else:
         clientSock.sendall(msg)

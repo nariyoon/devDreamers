@@ -214,11 +214,11 @@ class Form1(QMainWindow):
         msg_type = MT_COMMANDS  # Example message type : MT_COMMANDS = 1
 
         # Pack the message using the same structure as C#'s TMessageCommands
-        message = struct.pack("IIB", msg_len, msg_type, command)
+        message = struct.pack(">IIB", msg_len, msg_type, command)
         # Get only msg_type
-        unpacked_msg_type = struct.unpack("IIB", message)[1]
+        unpacked_msg_type = struct.unpack(">IIB", message)[1]
         self.log_message(f"msg_type: {unpacked_msg_type}")
-        print("msg_command", struct.unpack("IIB", message)[2])
+        print("msg_command", struct.unpack(">IIB", message)[2])
 
         # Other class example 
         sendMsgToCannon(message)
@@ -233,10 +233,10 @@ class Form1(QMainWindow):
 
     def update_image(self, message):
         # Unpack the message header
-        len = message[0:3]
-        len = int.from_bytes(len, byteorder='little', signed=False)
-        type = message[4:7]
-        type = int.from_bytes(type, byteorder='little', signed=False)
+        len = message[0:4]
+        len = int.from_bytes(len, byteorder='little')
+        type = message[4:8]
+        type = int.from_bytes(type, byteorder='little')
         # self.log_message(f"msg_type: ", type, "msg_len:", len, "")
         self.log_message(f"Imag Received, size: {len}")
 
