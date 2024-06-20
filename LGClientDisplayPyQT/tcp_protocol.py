@@ -31,22 +31,66 @@ class TMesssageHeader:
 
 clientSock = 0
 
-def tcp_ip_thread(frame_queue):
+# Define for updating image to UI
+image_update_callback = None
+
+# Callback function for sending image to UI
+def set_image_update_callback(callback):
+    # print("Callback function parameter sent.")
+    global image_update_callback
+    image_update_callback = callback
+
+# def tcp_ip_thread(frame_queue):
+#     """
+#     This thread handles TCP/IP communication with the Raspberry Pi.
+#     """
+#     print("start receiving image thread")
+#     host = '127.0.0.1'  # Localhost for testing, change to Raspberry Pi IP
+#     port = 5000  # Port to listen on
+#     # host = '192.168.0.224'  # Localhost for testing, change to Raspberry Pi IP
+#     # port = 5001  # Port to listen on
+
+#     serverAddress = (host, port)
+#     clientSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+#     try:
+#         clientSock.connect(serverAddress)
+#     except socket.error as e:
+#         print("Failed to connect to server:", e)
+#         # # Test Image function call
+#         # with open('c:\\test.jpg', 'rb') as f:
+#         #     image_data = f.read()
+#         # # 포맷 문자열을 정의합니다: 'II'는 두 개의 integer, 'I'는 바이트 배열의 길이를 나타내는 integer, f'{len(byte_array)}s'는 가변 길이의 바이트 배열
+#         # format_string = f'II{len(image_data)}s'
+#         # # struct.pack을 사용하여 데이터를 패킹합니다.
+#         # msg_len = len(image_data)
+#         # msg_type = 3  # MT_IMAGE
+#         # packed_data = struct.pack(format_string, msg_len, msg_type, image_data)
+#         # sendMsgToUI(packed_data)
+#         exit()
+
+def tcp_ip_thread(frame_queue, ip, port):
     """
     This thread handles TCP/IP communication with the Raspberry Pi.
     """
     print("start receiving image thread")
-    # host = '127.0.0.1'  # Localhost for testing, change to Raspberry Pi IP
-    host = '192.168.0.224'  # Localhost for testing, change to Raspberry Pi IP
-    port = 5001  # Port to listen on
-
-    serverAddress = (host, port)
-    clientSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
     try:
-        clientSock.connect(serverAddress)
-    except socket.error as e:
-        print("Failed to connect to server:", e)
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as clientSock:
+            clientSock.connect((ip, port))
+    except Exception as e:
+        print(f"TCP/IP thread encountered an error: {e}")
+        
+        # Test Image function call
+        with open('c:\\test.jpg', 'rb') as f:
+            image_data = f.read()
+        # 포맷 문자열을 정의합니다: 'II'는 두 개의 integer, 'I'는 바이트 배열의 길이를 나타내는 integer, f'{len(byte_array)}s'는 가변 길이의 바이트 배열
+        format_string = f'II{len(image_data)}s'
+        # struct.pack을 사용하여 데이터를 패킹합니다.
+        msg_len = len(image_data)
+        msg_type = 3  # MT_IMAGE
+        packed_data = struct.pack(format_string, msg_len, msg_type, image_data)
+        sendMsgToUI(packed_data)
+
         exit()
 
     while True:
@@ -92,7 +136,6 @@ def tcp_ip_thread(frame_queue):
                 # 이미지 크기 조정 (다른 곳에서 사용하는 포맷과 동일하게)
                 imageMat = cv2.resize(imageMat, (CAP_PROP_FRAME_WIDTH, CAP_PROP_FRAME_HEIGHT))
 
-                
                 # Put the image into the queue (if image size is valid)
                 try:
                     frame_queue.put(imageMat, timeout=2)
@@ -122,7 +165,6 @@ def tcp_ip_thread(frame_queue):
     clientSock.close()
     print("Network Thread Exit")
 
-
 def sendMsgToCannon(msg):
     print("recieve the msg. from UI for sending msg. to cannon(len: ", len(msg), ")")
     global clientSock
@@ -136,7 +178,6 @@ def sendMsgToCannon(msg):
         # send to command process
         print("type is MT_COMMANDS", type)
         clientSock.sendall(msg)
-        # sendMsgToUI(msg)
     else:
         clientSock.sendall(msg)
 
@@ -144,3 +185,8 @@ def sendMsgToUI(msg):
     print("send command to UI(len: ", len(msg), ")")
     # send callback to UI
     # recv_callback(msg)
+    if image_update_callback:
+        print("Callback function is called.")
+        image_update_callback(msg)
+    else:
+        print("No callback function set for image update.")
