@@ -40,59 +40,12 @@ def set_image_update_callback(callback):
     global image_update_callback
     image_update_callback = callback
 
-# def tcp_ip_thread(frame_queue):
-#     """
-#     This thread handles TCP/IP communication with the Raspberry Pi.
-#     """
-#     print("start receiving image thread")
-#     host = '127.0.0.1'  # Localhost for testing, change to Raspberry Pi IP
-#     port = 5000  # Port to listen on
-#     # host = '192.168.0.224'  # Localhost for testing, change to Raspberry Pi IP
-#     # port = 5001  # Port to listen on
-
-#     serverAddress = (host, port)
-#     clientSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-#     try:
-#         clientSock.connect(serverAddress)
-#     except socket.error as e:
-#         print("Failed to connect to server:", e)
-#         # # Test Image function call
-#         # with open('c:\\test.jpg', 'rb') as f:
-#         #     image_data = f.read()
-#         # # 포맷 문자열을 정의합니다: 'II'는 두 개의 integer, 'I'는 바이트 배열의 길이를 나타내는 integer, f'{len(byte_array)}s'는 가변 길이의 바이트 배열
-#         # format_string = f'II{len(image_data)}s'
-#         # # struct.pack을 사용하여 데이터를 패킹합니다.
-#         # msg_len = len(image_data)
-#         # msg_type = 3  # MT_IMAGE
-#         # packed_data = struct.pack(format_string, msg_len, msg_type, image_data)
-#         # sendMsgToUI(packed_data)
-#         exit()
-
 def tcp_ip_thread(frame_queue, ip, port):
     """
     This thread handles TCP/IP communication with the Raspberry Pi.
     """
+
     print("start receiving image thread: ", ip, "(", port, ")")
-#    try:
-#        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as clientSock:
-#            clientSock.connect((ip, port))
-#    except Exception as e:
-#        print(f"TCP/IP thread encountered an error: {e}")
-        
-        # Test Image function call
-#        with open('./test.jpg', 'rb') as f:
-#            image_data = f.read()
-        # 포맷 문자열을 정의합니다: 'II'는 두 개의 integer, 'I'는 바이트 배열의 길이를 나타내는 integer, f'{len(byte_array)}s'는 가변 길이의 바이트 배열
-#        format_string = f'II{len(image_data)}s'
-#        # struct.pack을 사용하여 데이터를 패킹합니다.
-#        msg_len = len(image_data)
-#        msg_type = 3  # MT_IMAGE
-#        packed_data = struct.pack(format_string, msg_len, msg_type, image_data)
-#        sendMsgToUI(packed_data)
-
-#        exit()
-
     global clientSock
     serverAddress = (ip, port)
     clientSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -120,7 +73,13 @@ def tcp_ip_thread(frame_queue, ip, port):
             if type_ == MT_IMAGE:
                 # Buffer to store the received message
                 buffer = bytearray(len_)
-                # print("buffer lenn ", len(buffer))
+
+                # TODO: send image to ui when manual mode
+                format_string = f'II{len(buffer)}s'
+                msg_len = len_
+                msg_type = MT_IMAGE
+                packed_data = struct.pack(format_string, msg_len, msg_type, buffer)
+                sendMsgToUI(packed_data)
 
                 # Receive data into the buffer
                 bytesReceived = 0
