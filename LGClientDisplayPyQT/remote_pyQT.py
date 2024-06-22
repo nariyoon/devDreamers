@@ -3,10 +3,12 @@ import zmq
 import threading
 import struct
 import cv2
+import re
 import numpy as np
 from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QCheckBox, QLabel, QLineEdit, QTextEdit, QVBoxLayout, QGridLayout, QWidget, QMessageBox
 from PyQt5.QtGui import QPixmap, QImage
 from PyQt5.QtCore import pyqtSlot, Qt, QTimer, QMetaObject, Q_ARG
+from PyQt5.QtGui import QIntValidator
 from usermodel.usermodel import UserModel
 from tcp_protocol import sendMsgToCannon, set_uimsg_update_callback
 from common import common_start
@@ -94,34 +96,54 @@ class Form1(QMainWindow):
         self.setCentralWidget(self.central_widget)
         layout = QGridLayout()
 
+        intValidator = QIntValidator()
+
         # Controls
         self.labelIPAddress = QLabel("IP Address:", self)
         self.editIPAddress = QLineEdit(self)
         self.editIPAddress.setText(self.user_model.ip)
+        self.editIPAddress.textChanged.connect(self.validCheckIpAndPort)
 
         self.labelTCPPort = QLabel("TCP Port:", self)
         self.editTCPPort = QLineEdit(self)
+        self.editTCPPort.setValidator(intValidator)
         self.editTCPPort.setText(self.user_model.port)
+        self.editTCPPort.textChanged.connect(self.validCheckIpAndPort)
 
         self.buttonConnect = QPushButton("Connect", self)
+        self.buttonConnect.setEnabled(False)
         self.buttonDisconnect = QPushButton("Disconnect", self)
+        self.buttonDisconnect.setEnabled(False)
 
         self.labelPreArmCode = QLabel("Pre-Arm Code:", self)
         self.editPreArmCode = QLineEdit(self)
+        self.editPreArmCode.setEnabled(False)
+        self.editPreArmCode.setValidator(intValidator)
+        self.editPreArmCode.textChanged.connect(self.validCheckPreArmedCode)
+
         self.buttonPreArmEnable = QPushButton("Pre-Arm Enable", self)
+        self.buttonPreArmEnable.setEnabled(False)
 
         self.checkBoxArmedManualEnable = QCheckBox("Armed Manual", self)
+        self.checkBoxArmedManualEnable.setEnabled(False)
         self.checkBoxLaserEnable = QCheckBox("Laser Enabled", self)
+        self.checkBoxLaserEnable.setEnabled(False)
 
         self.labelEngageOrder = QLabel("Engage Order:", self)
         self.editEngageOrder = QLineEdit(self)
+        self.editEngageOrder.setEnabled(False)
+        self.editEngageOrder.setValidator(intValidator)
+        self.editEngageOrder.textChanged.connect(self.validCheckEngageOrder)
 
         self.checkBoxAutoEngage = QCheckBox("Auto Engage", self)
+        self.checkBoxAutoEngage.setEnabled(False)
         self.checkBoxCalibrate = QCheckBox("Calibrate", self)
+        self.checkBoxCalibrate.setEnabled(False)
         
         self.labelState = QLabel("System State:", self)
         self.editState = QLineEdit(self)
-        # self.editState.setReadOnly(True)
+        self.editState.setText("UnKnown")
+        self.editState.setReadOnly(True)
         self.updateSystemState()
 
         self.pictureBox = QLabel(self)
@@ -176,6 +198,49 @@ class Form1(QMainWindow):
     # def set_send_command_callback(self, callback):
     #     self.send_command_callback = callback
 
+    
+    def validCheckIpAndPort(self,text): 
+        self.buttonConnect.setEnabled(False)
+
+        ip = self.editIPAddress.text()
+        port = self.editTCPPort.text()
+
+        if not ip:
+             self.log_message(f'Please enter ip address.')
+        elif not port:
+             self.log_message(f'Please enter port number.')
+        elif not self.check_ipv4(ip) :
+             self.log_message(f'Not mache IP Address Pattern.')
+        elif not self.check_port(port) :
+             self.log_message(f'Port must be 0-65535..')
+        else:
+             self.buttonConnect.setEnabled(True)
+
+
+    def validCheckPreArmedCode(self,code):
+        if code:
+            self.buttonPreArmEnable.setEnabled(True)
+        else:
+            self.log_message(f"Please enter preArmedCode")
+
+    def validCheckEngageOrder(self,order):
+        if order:
+            self.checkBoxAutoEngage.setEnabled(True)
+        else :
+            self.log_message(f"Please enter engageOrders")
+
+    def check_port(self, port):
+        pattern = r'^(?:[1-9]\d{0,3}|0)$'
+        return bool(re.match(pattern, port))
+    
+
+    def check_ipv4(self,ip):
+        ipv4_pattern = r'^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$'
+        if re.match(ipv4_pattern, ip):
+            return True
+        else:
+            return False
+    
     @pyqtSlot()
     def connect(self):
         ip = self.editIPAddress.text()
@@ -190,6 +255,32 @@ class Form1(QMainWindow):
         self.tcp_thread.start()
         self.log_message("Connected")
 
+        self.setAllUIEnabled(True, False)
+
+    def setAllUIEnabled(self, connected, preArmed):
+
+        if not connected:
+            self.checkBoxAutoEngage.setChecked(False)
+            self.checkBoxCalibrate.setChecked(False)
+            self.checkBoxArmedManualEnable.setChecked(False)
+            self.checkBoxLaserEnable.setChecked(False)
+
+        self.editIPAddress.setEnabled(False if connected else True)
+        self.editTCPPort.setEnabled(False if connected else True)
+        self.buttonConnect.setEnabled(False if connected else True)
+
+        self.buttonDisconnect.setEnabled(True if connected else False)
+        self.editPreArmCode.setEnabled(True if connected else False)
+
+        self.buttonPreArmEnable.setEnabled(False if preArmed else True)
+        self.checkBoxArmedManualEnable.setEnabled(True if preArmed else False)
+        self.checkBoxLaserEnable.setEnabled(True if preArmed else False)
+        self.editEngageOrder.setEnabled(True if preArmed else False)
+        self.checkBoxAutoEngage.setEnabled(True if preArmed else False)
+        self.checkBoxCalibrate.setEnabled(True if preArmed else False)
+
+        
+
     @pyqtSlot()
     def disconnect(self):
         self.log_message("Disconnected")
@@ -198,6 +289,8 @@ class Form1(QMainWindow):
             # self.frame_queue.put(None)  # Signal the thread to stop
             self.tcp_thread.join()
             self.log_message("Disconnected")
+        
+        self.setAllUIEnabled(False, False)
 
     @pyqtSlot()
     def pre_arm_enable(self):
@@ -237,8 +330,13 @@ class Form1(QMainWindow):
         self.log_message(f"Auto Engage Enabled: {self.checkBoxArmedManualEnable.isChecked()}")
         if (self.checkBoxAutoEngage.isChecked() == True):
             self.send_state_change_request_to_server(ST_ENGAGE_AUTO)
-            char_array = self.get_char_array_from_text(self.editEngageOrder.text)
-            self.send_target_order_to_server(char_array)
+            engageOrder = self.editEngageOrder.text
+
+            if not engageOrder:
+                self.log_message(f"Please enter engageOrders")
+            else:
+                char_array = self.get_char_array_from_text(engageOrder)
+                self.send_target_order_to_server(char_array)
         else:
             self.send_state_change_request_to_server(ST_PREARMED)  
 
