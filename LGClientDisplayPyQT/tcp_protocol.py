@@ -19,6 +19,7 @@ MT_PREARM = 5
 MT_STATE = 6
 MT_STATE_CHANGE_REQ = 7
 MT_CALIB_COMMANDS = 8
+MT_ERROR = 9
 
 # cannon status
 UNKNOWN = 0
@@ -30,6 +31,11 @@ ARMED = 16 #0x10
 FIRING = 32 #0x20
 LASER_ON = 64 #0x40
 CALIB_ON = 128 #0x80
+
+# error code
+ERR_SUCCESS = 0
+ERR_FAIL_TO_CONNECT = 1
+ERR_CONNECTION_LOST = 2
 
 # testtest
 CAP_PROP_FRAME_WIDTH = 1920
@@ -69,6 +75,10 @@ def tcp_ip_thread(frame_queue, ip, port):
     except socket.error as e:
         print("Failed to connect to server:", e)
         exit()
+
+    errorCode = ERR_SUCCESS
+    packedData = struct.pack(">IIB", 9, MT_ERROR, errorCode)
+    sendMsgToUI(packedData)
 
     while True:
         try:
@@ -140,10 +150,16 @@ def tcp_ip_thread(frame_queue, ip, port):
                 sendMsgToUI(packedData)
 
         except socket.error as e:
-            if e.errno == errno.ECONNRESET:
-                print("Client disconnected.")
+            errorCode = ERR_CONNECTION_LOST
+            if e.errno == errno.ETIMEDOUT or e.errno == errno.ECONNREFUSED:
+                print("fail to connect.")
+                errorCode = ERR_FAIL_TO_CONNECT
             else:
                 print("Connection lost:", str(e))
+
+            # send error code to UI
+            packedData = struct.pack(">IIB", 9, MT_ERROR, errorCode)
+            sendMsgToUI(packedData)
             break
 
     #cv2.destroyAllWindows()
@@ -173,7 +189,7 @@ def sendMsgToCannon(msg):
         clientSock.sendall(msg)
 
 def sendMsgToUI(msg):
-    print("send command to UI(len: ", len(msg), ")")
+    # print("send command to UI(len: ", len(msg), ")")
     # send callback to UI
     
     # recv_callback(msg)
