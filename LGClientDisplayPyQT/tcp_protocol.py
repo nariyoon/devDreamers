@@ -32,13 +32,13 @@ class TMesssageHeader:
 clientSock = 0
 
 # Define for updating image to UI
-image_update_callback = None
+uimsg_update_callback = None
 
 # Callback function for sending image to UI
-def set_image_update_callback(callback):
+def set_uimsg_update_callback(callback):
     # print("Callback function parameter sent.")
-    global image_update_callback
-    image_update_callback = callback
+    global uimsg_update_callback
+    uimsg_update_callback = callback
 
 def tcp_ip_thread(frame_queue, ip, port):
     """
@@ -120,11 +120,36 @@ def tcp_ip_thread(frame_queue, ip, port):
 
             else:
                 print("bypass to UI")
-                print("len_ ", len_, "header type_ ", type_)
-                msg = clientSock.recv(512)
-                #msg = clientSock.recv(len_ + len(headerData))
-                sendMsgToUI(msg)
+                # Buffer to store the received message
+                buffer = bytearray(len_)
+
+                # Receive data into the buffer
+                bytesReceived = 0
+                while bytesReceived < len_:
+                    chunk = clientSock.recv(len_ - bytesReceived)
+                    if not chunk:
+                        # Handle error or connection closed
+                        break
+                    buffer[bytesReceived:bytesReceived + len(chunk)] = chunk
+                    bytesReceived += len(chunk)
+
+                # Check if all expected bytes have been received
+                if bytesReceived != len_:
+                    continue
+
+                # TODO: send image to ui when manual mode
+                format_string = f'II{len(buffer)}s'
+                msg_len = len_
+                msg_type = type_
+                print("len_ ", len_, "header type_ ", type_, "data_", int.from_bytes(buffer, byteorder='little'))
+                packed_data = struct.pack(format_string, msg_len, msg_type, buffer)
+                sendMsgToUI(packed_data)
+
+                # print("len_ ", len_, "header type_ ", type_)
+                # msg = clientSock.recv(512)
+                # #msg = clientSock.recv(len_ + len(headerData))
                 # sendToUi
+                # sendMsgToUI(msg)
 
         except socket.error as e:
             if e.errno == errno.ECONNRESET:
@@ -155,9 +180,10 @@ def sendMsgToCannon(msg):
 def sendMsgToUI(msg):
     print("send command to UI(len: ", len(msg), ")")
     # send callback to UI
+    
     # recv_callback(msg)
-    if image_update_callback:
+    if uimsg_update_callback:
         print("Callback function is called.")
-        image_update_callback(msg)
+        uimsg_update_callback(msg)
     else:
         print("No callback function set for image update.")
