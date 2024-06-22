@@ -19,6 +19,18 @@ MT_PREARM = 5
 MT_STATE = 6
 MT_STATE_CHANGE_REQ = 7
 MT_CALIB_COMMANDS = 8
+
+# cannon status
+UNKNOWN = 0
+SAFE = 1  #0x1
+PREARMED = 2 #0x2
+ENGAGE_AUTO = 4 #0x4
+ARMED_MANUAL = 8 #0x8
+ARMED = 16 #0x10
+FIRING = 32 #0x20
+LASER_ON = 64 #0x40
+CALIB_ON = 128 #0x80
+
 # testtest
 CAP_PROP_FRAME_WIDTH = 1920
 CAP_PROP_FRAME_HEIGHT = 1080
@@ -29,7 +41,9 @@ class TMesssageHeader:
         self.Len = len_
         self.Type = type_
 
+# global variables
 clientSock = 0
+cannonStatus = UNKNOWN
 
 # Define for updating image to UI
 uimsg_update_callback = None
@@ -70,31 +84,28 @@ def tcp_ip_thread(frame_queue, ip, port):
             type_ = socket.ntohl(type_)
             # print("header len_ ", len_, "header type_ ", type_)
 
+            # Buffer to store the received message
+            buffer = bytearray(len_)
+
+            # Receive data into the buffer
+            bytesReceived = 0
+            while bytesReceived < len_:
+                chunk = clientSock.recv(len_ - bytesReceived)
+                if not chunk:
+                    # Handle error or connection closed
+                    break
+                buffer[bytesReceived:bytesReceived + len(chunk)] = chunk
+                bytesReceived += len(chunk)
+
+            # Check if all expected bytes have been received
+            if bytesReceived != len_:
+                continue
+
+            packedData = struct.pack(f'>II{len(buffer)}s', len_, type_, buffer)
+
             if type_ == MT_IMAGE:
-                # Buffer to store the received message
-                buffer = bytearray(len_)
-
-                # Receive data into the buffer
-                bytesReceived = 0
-                while bytesReceived < len_:
-                    chunk = clientSock.recv(len_ - bytesReceived)
-                    if not chunk:
-                        # Handle error or connection closed
-                        break
-                    buffer[bytesReceived:bytesReceived + len(chunk)] = chunk
-                    bytesReceived += len(chunk)
-
-                # Check if all expected bytes have been received
-                if bytesReceived != len_:
-                    continue
-
-                # TODO: send image to ui when manual mode
-                # format_string = f'II{len(buffer)}s'
-                format_string = f'>II{len(buffer)}s'
-                msg_len = len_
-                msg_type = MT_IMAGE
-                packed_data = struct.pack(format_string, msg_len, msg_type, buffer)
-                sendMsgToUI(packed_data)
+                # TODO: send image to ui when state is not auto-engage mode (if cannonState != ENGAGE_AUTO)
+                sendMsgToUI(packedData)
 
                 # 이미지를 디코딩
                 imageMat = cv2.imdecode(np.frombuffer(buffer, dtype=np.uint8), cv2.IMREAD_COLOR)
@@ -114,37 +125,19 @@ def tcp_ip_thread(frame_queue, ip, port):
                     frame_queue.get()
                     frame_queue.put(imageMat)
 
-                cv2.imshow('camera', imageMat)
-                key = cv2.waitKey(1)
-                if key & 0xFF == ord('q'):
-                    break
-
+                #cv2.imshow('camera', imageMat)
+                #key = cv2.waitKey(1)
+                #if key & 0xFF == ord('q'):
+                #    break
+            elif MT_STATE:
+                global cannonStatus
+                valueInt = int.from_bytes(buffer, byteorder='big')
+                print("state: ", buffer, " valueInt: ", valueInt)
+                cannonStatus = valueInt
+                sendMsgToUI(packedData)
             else:
-                print("bypass to UI")
-                # Buffer to store the received message
-                buffer = bytearray(len_)
-
-                # Receive data into the buffer
-                bytesReceived = 0
-                while bytesReceived < len_:
-                    chunk = clientSock.recv(len_ - bytesReceived)
-                    if not chunk:
-                        # Handle error or connection closed
-                        break
-                    buffer[bytesReceived:bytesReceived + len(chunk)] = chunk
-                    bytesReceived += len(chunk)
-
-                # Check if all expected bytes have been received
-                if bytesReceived != len_:
-                    continue
-
-                # TODO: send image to ui when manual mode
-                format_string = f'>II{len(buffer)}s'
-                msg_len = len_
-                msg_type = type_
                 print("len_ ", len_, "header type_ ", type_, "data_", int.from_bytes(buffer, byteorder='big'))
-                packed_data = struct.pack(format_string, msg_len, msg_type, buffer)
-                sendMsgToUI(packed_data)
+                sendMsgToUI(packedData)
 
         except socket.error as e:
             if e.errno == errno.ECONNRESET:
@@ -153,22 +146,27 @@ def tcp_ip_thread(frame_queue, ip, port):
                 print("Connection lost:", str(e))
             break
 
-    cv2.destroyAllWindows()
+    #cv2.destroyAllWindows()
     clientSock.close()
     print("Network Thread Exit")
 
 def sendMsgToCannon(msg):
     global clientSock
-    type = msg[4:8]
-    typeInt = int.from_bytes(type, byteorder='big')
+    global cannonStatus
 
-    print("recieve the msg. from UI for sending msg. to cannon( ", msg, "len: ", len(msg), "type: ", typeInt, ")")
+    type = msg[4:8]
+    value = msg[8:]
+
+    typeInt = int.from_bytes(type, byteorder='big')
+    valueInt = int.from_bytes(value, byteorder='big')
+
+    print("recieve the msg. from UI for sending msg. to cannon( ", msg, "len: ", len(msg), "type: ", typeInt, "value: ", value, "/", valueInt, ")")
     if typeInt == MT_TARGET_SEQUENCE:
         # send to image process
         print("type is MT_TARGET_SEQUENCE")
-    elif typeInt == MT_COMMANDS:
-        # send to command process
-        print("type is MT_COMMANDS")
+    elif typeInt == MT_STATE_CHANGE_REQ:
+        print("type is MT_STATE_CHANGE_REQ / value: ", valueInt)
+        cannonStatus = valueInt
         clientSock.sendall(msg)
     else:
         print("type is MT_ELSE")
