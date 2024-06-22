@@ -89,7 +89,8 @@ def tcp_ip_thread(frame_queue, ip, port):
                     continue
 
                 # TODO: send image to ui when manual mode
-                format_string = f'II{len(buffer)}s'
+                # format_string = f'II{len(buffer)}s'
+                format_string = f'>II{len(buffer)}s'
                 msg_len = len_
                 msg_type = MT_IMAGE
                 packed_data = struct.pack(format_string, msg_len, msg_type, buffer)
@@ -138,18 +139,12 @@ def tcp_ip_thread(frame_queue, ip, port):
                     continue
 
                 # TODO: send image to ui when manual mode
-                format_string = f'II{len(buffer)}s'
+                format_string = f'>II{len(buffer)}s'
                 msg_len = len_
                 msg_type = type_
-                print("len_ ", len_, "header type_ ", type_, "data_", int.from_bytes(buffer, byteorder='little'))
+                print("len_ ", len_, "header type_ ", type_, "data_", int.from_bytes(buffer, byteorder='big'))
                 packed_data = struct.pack(format_string, msg_len, msg_type, buffer)
                 sendMsgToUI(packed_data)
-
-                # print("len_ ", len_, "header type_ ", type_)
-                # msg = clientSock.recv(512)
-                # #msg = clientSock.recv(len_ + len(headerData))
-                # sendToUi
-                # sendMsgToUI(msg)
 
         except socket.error as e:
             if e.errno == errno.ECONNRESET:
@@ -157,6 +152,7 @@ def tcp_ip_thread(frame_queue, ip, port):
             else:
                 print("Connection lost:", str(e))
             break
+
     cv2.destroyAllWindows()
     clientSock.close()
     print("Network Thread Exit")
@@ -175,6 +171,7 @@ def sendMsgToCannon(msg):
         print("type is MT_COMMANDS")
         clientSock.sendall(msg)
     else:
+        print("type is MT_ELSE")
         clientSock.sendall(msg)
 
 def sendMsgToUI(msg):

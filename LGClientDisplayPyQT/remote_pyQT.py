@@ -202,9 +202,16 @@ class Form1(QMainWindow):
     @pyqtSlot()
     def pre_arm_enable(self):
         self.log_message("Pre-Arm Enable clicked")
-        if ((self.RcvState_Curr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_SAFE):
+        if isinstance(self.RcvState_Curr, bytes):
+            state_int = int.from_bytes(self.RcvState_Curr, byteorder='little')
+        else:
+            state_int = self.RcvState_Curr
+
+        if ((state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_SAFE):
+            self.log_message("Send Pre-Arm Enable")
             self.send_pre_arm_code_to_server(int(self.editPreArmCode.text()))
         else:
+            self.log_message("Send Pre-Arm Disable")
             self.send_state_change_request_to_server(ST_SAFE)
 
     @pyqtSlot()
@@ -245,9 +252,6 @@ class Form1(QMainWindow):
             RcvState_Curr &= ST_CLEAR_CALIB_MASK
             self.sensend_state_change_request_to_server(RcvState_Curr)
             self.updateSystemState()
-           
-
-
 
     def get_char_array_from_text(line_edit):
         text = line_edit.text()[:11]  # 최대 11자까지 자르기
@@ -270,14 +274,14 @@ class Form1(QMainWindow):
         msg_type = MT_COMMANDS  # Example message type : MT_COMMANDS = 1
 
         # Pack the message using the same structure as C#'s TMessageCommands
-        message = struct.pack(">IIB", msg_len, msg_type, command)
+        message = struct.pack(">IIB", msg_len, msg_type, command) #make by big
         # Get only msg_type
-        unpacked_msg_type = struct.unpack(">IIB", message)[1]
+        unpacked_msg_type = struct.unpack(">IIB", message)[1] #read by little
         self.log_message(f"msg_type: {unpacked_msg_type}")
-        print("msg_command", struct.unpack(">IIB", message)[2])
+        self.log_message(f"msg_command", struct.unpack(">IIB", message)[2]) #read by little
 
         # Other class example 
-        # sendMsgToCannon(message)
+        sendMsgToCannon(message)
         self.log_message(f"Set command: {command}")
 
     ########################################################################
@@ -313,7 +317,7 @@ class Form1(QMainWindow):
     def send_pre_arm_code_to_server(self, code):
         if self.is_client_connected():
             msg_len = struct.calcsize(">II") + len(code) + 1
-            msg = struct.pack(">II", len(code) + 1, MT_PREARM)
+            msg = struct.pack(">II", len(code) + 1, MT_PREARM) # make by big
             msg += code.encode('utf-8') + b'\x00'
             sendMsgToCannon(msg)
             return True
@@ -324,7 +328,7 @@ class Form1(QMainWindow):
     def send_state_change_request_to_server(self, state):
         if self.is_client_connected():
             msg_len = struct.calcsize(">II") + struct.calcsize(">I")
-            msg = struct.pack(">II", struct.calcsize(">I"), MT_STATE_CHANGE_REQ)
+            msg = struct.pack(">II", struct.calcsize(">I"), MT_STATE_CHANGE_REQ) # make by big
             msg += struct.pack(">I", state)
             sendMsgToCannon(msg)
             return True
@@ -338,22 +342,27 @@ class Form1(QMainWindow):
         QApplication.processEvents()  # Process events to update UI
 
     ########################################################################
-    #
+    # Update Current System State
     def updateSystemState(self):
-        print("test")
-        # if (self.RcvState_Curr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_UNKNOWN:
-        #     self.editState.setText("UNKNOWN")
-        # elif (self.RcvState_Curr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_SAFE:
-        #     self.editState.setText("SAFE")
-        # elif (self.RcvState_Curr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_PREARMED:
-        #     self.editState.setText("PREARMED")
-        # elif (self.RcvState_Curr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_ENGAGE_AUTO:
-        #     self.editState.setText("ENGAGE_AUTO")
-        # elif (self.RcvState_Curr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_ARMED_MANUAL:
-        #     self.editState.setText("ARMED_MANUAL") 
-        # elif (self.RcvState_Curr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_ARMED:
-        #     self.editState.setText("ARMED") 
-        # # elif (self.RcvSTate_Curr | ST_CALIB_ON)* == 
+        if isinstance(self.RcvState_Curr, bytes):
+            state_int = int.from_bytes(self.RcvState_Curr, byteorder='little')
+        else:
+            state_int = self.RcvState_Curr
+
+        if (state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_UNKNOWN:
+            self.editState.setText("UNKNOWN")
+        elif (state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_SAFE:
+            self.editState.setText("SAFE")
+        elif (state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_PREARMED:
+            self.editState.setText("PREARMED")
+        elif (state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_ENGAGE_AUTO:
+            self.editState.setText("ENGAGE_AUTO")
+        elif (state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_ARMED_MANUAL:
+            self.editState.setText("ARMED_MANUAL") 
+        elif (state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_ARMED:
+            self.editState.setText("ARMED") 
+        else:
+            self.editState.setText("GGGG") 
 
     ###################################################################
     # callback_msg 처리할때 MT 메시지 종류에 따라 차등 처리 기능 구현
@@ -365,14 +374,16 @@ class Form1(QMainWindow):
         # self.log_message(f"Based on little endian, Received: {len_, type_, rcv_state_}")
         # len_, type_, rcv_state_ = struct.unpack('>III', message[:12])
         # self.log_message(f"Based on big endian, Received: {len_, type_, rcv_state_}")
+        # unpacked_msg_type = struct.unpack(">IIB", message)[1] #read by little
 
         # Unpack the message header
         len = message[0:4]
-        len = int.from_bytes(len, byteorder='little')
+        len = int.from_bytes(len, byteorder='big')
         type = message[4:8]
-        type = int.from_bytes(type, byteorder='little')
+        type = int.from_bytes(type, byteorder='big')
         self.log_message(f"Imag Received, size: {len}")
 
+        # MT_IMAGE는 tcp_protocol에서 직접 보내주므로 little로 변환된 데이터 수신
         if type == MT_IMAGE:
             # print test
             print("MT_IMAGE Received")
@@ -393,6 +404,7 @@ class Form1(QMainWindow):
                 self.pictureBox.setPixmap(pixmap)
                 self.pictureBox.setScaledContents(True)
 
+        # 나머지 MT_MSG 들은 byte 배열이 들어오므로 bit -> little 변환이 필요함, 송신도 마찬가지
         elif type == MT_STATE:
             # print test
             print("MT_STATE Received")
@@ -400,10 +412,12 @@ class Form1(QMainWindow):
             # Buffer to store the received message
             rcv_state = bytearray(len)
             rcv_state = message[8:len+7]
+            rcv_state = int.from_bytes(rcv_state, byteorder='big')
             self.RcvState_Curr = rcv_state
             self.updateSystemState()
             if self.RcvState_Curr != self.RcvState_Prev:
                 self.RcvState_Prev = self.RcvState_Curr
+
         else:
             # print test
             print("MT_ELSE Received", type)
@@ -459,8 +473,9 @@ class Form1(QMainWindow):
             Qt.Key_Return: CT_FIRE_START
         }
 
-        if event.key() in key_map:
-            self.set_command(key_map[event.key()])
+        if self.RcvState_Curr == ST_ARMED_MANUAL: 
+            if event.key() in key_map:
+                self.set_command(key_map[event.key()])
 
     def keyReleaseEvent(self, event):
         key_map = {
@@ -476,8 +491,9 @@ class Form1(QMainWindow):
             Qt.Key_Return: CT_FIRE_STOP
         }
 
-        if event.key() in key_map:
-            self.set_command(key_map[event.key()])
+        if self.RcvState_Curr == ST_ARMED_MANUAL: 
+            if event.key() in key_map:
+                self.set_command(key_map[event.key()])
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
