@@ -101,13 +101,11 @@ class Form1(QMainWindow):
         # Controls
         self.labelIPAddress = QLabel("IP Address:", self)
         self.editIPAddress = QLineEdit(self)
-        self.editIPAddress.setText(self.user_model.ip)
         self.editIPAddress.textChanged.connect(self.validCheckIpAndPort)
 
         self.labelTCPPort = QLabel("TCP Port:", self)
         self.editTCPPort = QLineEdit(self)
         self.editTCPPort.setValidator(intValidator)
-        self.editTCPPort.setText(self.user_model.port)
         self.editTCPPort.textChanged.connect(self.validCheckIpAndPort)
 
         self.buttonConnect = QPushButton("Connect", self)
@@ -192,13 +190,22 @@ class Form1(QMainWindow):
 
         self.log_message("Init Start...")
 
+        self.setInitialValue()
+
+        
+
     # def set_recv_callback(self, callback):
     #     self.recv_callback = callback
 
     # def set_send_command_callback(self, callback):
     #     self.send_command_callback = callback
 
-    
+    def setInitialValue(self):
+        self.setAllUIEnabled(False, False)
+        self.editIPAddress.setText(self.user_model.ip)
+        self.editTCPPort.setText(self.user_model.port)
+
+
     def validCheckIpAndPort(self,text): 
         self.buttonConnect.setEnabled(False)
 
@@ -254,7 +261,7 @@ class Form1(QMainWindow):
         self.tcp_thread = threading.Thread(target=common_start, args=(ip, port))
         self.tcp_thread.start()
         self.log_message("Connected")
-
+        self.user_model.save_to_config(ip, port)
         self.setAllUIEnabled(True, False)
 
     def setAllUIEnabled(self, connected, preArmed):
