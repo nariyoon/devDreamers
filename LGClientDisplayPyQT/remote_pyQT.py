@@ -6,7 +6,7 @@ import cv2
 import re
 import numpy as np
 from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QCheckBox, QLabel, QLineEdit, QTextEdit, QVBoxLayout, QGridLayout, QWidget, QMessageBox
-from PyQt5.QtGui import QPixmap, QImage
+from PyQt5.QtGui import QPixmap, QImage, QPainter, QPen, QColor
 from PyQt5.QtCore import pyqtSlot, Qt, QTimer, QMetaObject, Q_ARG
 from PyQt5.QtGui import QIntValidator
 from usermodel.usermodel import UserModel
@@ -64,6 +64,7 @@ class Form1(QMainWindow):
     # Model : RcsState
     RcvState_Curr = ST_UNKNOWN
     RcvState_Prev = ST_UNKNOWN
+    RcvState_Requested = ST_UNKNOWN
 
     # Model : Prev. RecvMsg (Received total msg stored including TMessageHeader)
     RecvMsg_Command = '0x0'
@@ -158,7 +159,7 @@ class Form1(QMainWindow):
         # self.editState.setReadOnly(True)
         
         self.pictureBox = QLabel(self)
-        self.pictureBox.setFixedSize(720, 540)  # Adjust size to 3/4 of the original
+        self.pictureBox.setFixedSize(800, 640)  # Adjust size to 3/4 of the original
 
         self.logBox = QTextEdit(self)
         self.logBox.setReadOnly(True)
@@ -325,11 +326,14 @@ class Form1(QMainWindow):
 
         # if ((state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_SAFE):
         self.log_message("Send Pre-Arm Enable")
+        print("Send Pre-Arm Enable")
         
         char_array = self.get_char_array_prearmed_from_text(self.editPreArmCode)
         self.send_pre_arm_code_to_server(char_array)
         
-        self.RcvState_Curr = MT_PREARM
+        # Update Current State 
+        self.RcvState_Curr = ST_PREARMED
+        self.RcvState_Requested = ST_PREARMED
         self.updateSystemState()
 
         self.setAllUIEnabled(True, True)
@@ -341,12 +345,23 @@ class Form1(QMainWindow):
     @pyqtSlot()
     def toggle_laser(self):
         self.log_message(f"Laser Enabled: {self.checkBoxLaserEnable.isChecked()}")
-        if (self.checkBoxLaserEnable.isChecked() == True):
-            self.RcvState_Curr |= ST_LASER_ON
-            self.send_state_change_request_to_server(self.RcvState_Curr)
+        print("Laser Enabled: ", {self.checkBoxLaserEnable.isChecked()})
+
+        if isinstance(self.RcvState_Curr, bytes):
+            state_int = int.from_bytes(self.RcvState_Curr, byteorder='little')
         else:
-            self.RcvState_Curr &= ST_CLEAR_LASER_MASK
-            self.send_state_change_request_to_server(ST_SAFE)
+            state_int = self.RcvState_Curr
+
+        if (self.checkBoxLaserEnable.isChecked() == True):
+            # self.RcvState_Curr |= ST_LASER_ON
+            # self.send_state_change_request_to_server(self.RcvState_Curr)
+            state_int |= ST_LASER_ON
+            self.send_state_change_request_to_server(state_int)
+        else:
+            # self.RcvState_Curr &= ST_CLEAR_LASER_MASK
+            # self.send_state_change_request_to_server(self.RcvState_Curr)
+            state_int &= ST_CLEAR_LASER_MASK
+            self.send_state_change_request_to_server(state_int)
     
     @pyqtSlot()
     def toggle_armed_manual(self):
@@ -374,16 +389,27 @@ class Form1(QMainWindow):
 
     @pyqtSlot()
     def toggle_calib(self):
-        if(self.checkBoxCalibrate.isChecked() == True):
-            RcvState_Curr |= ST_CALIB_ON
-            self.sensend_state_change_request_to_server(RcvState_Curr)
-            self.updateSystemState()
+        self.log_message(f"Calibration Enabled: {self.checkBoxCalibrate.isChecked()}")
+        print("Calibration Enabled: ", {self.checkBoxCalibrate.isChecked()})
+
+        if isinstance(self.RcvState_Curr, bytes):
+            state_int = int.from_bytes(self.RcvState_Curr, byteorder='little')
         else:
-            RcvState_Curr &= ST_CLEAR_CALIB_MASK
-            self.sensend_state_change_request_to_server(RcvState_Curr)
-            self.updateSystemState()
-    
-    
+            state_int = self.RcvState_Curr
+
+        if(self.checkBoxCalibrate.isChecked() == True):
+            # RcvState_Curr |= ST_CALIB_ON
+            # self.sensend_state_change_request_to_server(RcvState_Curr)
+            # self.updateSystemState()
+            state_int |= ST_CALIB_ON
+            self.send_state_change_request_to_server(state_int)
+        else:
+            # RcvState_Curr &= ST_CLEAR_CALIB_MASK
+            # self.sensend_state_change_request_to_server(RcvState_Curr)
+            # self.updateSystemState()
+            state_int &= ST_CLEAR_CALIB_MASK
+            self.send_state_change_request_to_server(state_int)
+        
     ########################################################################
     # MT_COMMANDS 전송
     def set_command(self, command):
@@ -421,6 +447,50 @@ class Form1(QMainWindow):
         return False
 
     ########################################################################
+    # MT_PREARM 암호 생성
+    def get_char_array_prearmed_from_text(self, line_edit):
+        text = line_edit.text()[:8]  # 최대 8자까지 자르기
+        char_array = bytearray(9)  # 8자 + 널 문자('\0')
+
+        # 문자열을 byte 배열에 복사
+        for i, c in enumerate(text):
+            char_array[i] = ord(c)
+
+        # 널 문자('\0') 추가
+        char_array[len(text)] = 0
+
+        print("get_char_array_prearmed_from_text to cannon", char_array, " ", len(char_array))
+        return char_array
+    
+    ########################################################################
+    # MT_PREARM 암호 전송
+    def send_pre_arm_code_to_server(self, code):
+        if self.is_client_connected():
+            msg_len = struct.calcsize(">II") + len(code)
+            msg = struct.pack(">II", len(code), MT_PREARM)  # 길이 조정
+            msg = bytearray(msg)  # msg를 bytearray로 변환
+
+            # code의 각 바이트를 msg에 추가
+            for byte in code:
+                msg.append(byte)
+
+            print("send_pre_arm_code_to_server ", ' '.join(f'0x{byte:02x}' for byte in msg))
+            sendMsgToCannon(bytes(msg))
+            return True
+        return False
+
+    ########################################################################
+    # MT_STATE_CHANGE_REQ 전송
+    def send_state_change_request_to_server(self, state):
+        if self.is_client_connected():
+            msg_len = struct.calcsize(">II") + struct.calcsize(">I")
+            msg = struct.pack(">II", struct.calcsize(">I"), MT_STATE_CHANGE_REQ) # make by big
+            msg += struct.pack(">I", state)
+            sendMsgToCannon(msg)
+            return True
+        return False
+    
+    ########################################################################
     # MT_TARGET_SEQUENCE 전송
     def get_char_array_autoengage_from_text(self, line_edit):
         text = line_edit.text()[:10]  # 최대 11자까지 자르기
@@ -442,58 +512,13 @@ class Form1(QMainWindow):
     def send_target_order_to_server(self, target_order):
         if self.is_client_connected():
             msg_len = struct.calcsize(">II") + len(target_order)
-            msg = struct.pack(">II", len(target_order) - 1, MT_TARGET_SEQUENCE)  # 길이 조정
+            msg = struct.pack(">II", len(target_order), MT_TARGET_SEQUENCE)  # 길이 조정
             msg = bytearray(msg)  # msg를 bytearray로 변환
 
             # code의 각 바이트를 msg에 추가
             for byte in target_order:
                 msg.append(byte)
 
-            sendMsgToCannon(msg)
-            return True
-        return False
-
-    ########################################################################
-    # MT_PREARM 암호 생성
-    def get_char_array_prearmed_from_text(self, line_edit):
-        text = line_edit.text()[:8]  # 최대 8자까지 자르기
-        char_array = bytearray(9)  # 8자 + 널 문자('\0')
-
-        # 문자열을 byte 배열에 복사
-        for i, c in enumerate(text):
-            char_array[i] = ord(c)
-
-        # 널 문자('\0') 추가
-        char_array[len(text)] = 0
-
-        print("get_char_array_prearmed_from_text to cannon", char_array, " ", len(char_array))
-        return char_array
-    
-    ########################################################################
-    # MT_PREARM 암호 전송
-    def send_pre_arm_code_to_server(self, code):
-        if self.is_client_connected():
-            msg_len = struct.calcsize(">II") + len(code)
-            msg = struct.pack(">II", len(code) - 1, MT_PREARM)  # 길이 조정
-            msg = bytearray(msg)  # msg를 bytearray로 변환
-
-            # code의 각 바이트를 msg에 추가
-            for byte in code:
-                msg.append(byte)
-
-            # print("send_pre_arm_code_to_server ", msg)
-            print("send_pre_arm_code_to_server ", ' '.join(f'0x{byte:02x}' for byte in msg))
-            sendMsgToCannon(bytes(msg))
-            return True
-        return False
-
-    ########################################################################
-    # MT_STATE_CHANGE_REQ 전송
-    def send_state_change_request_to_server(self, state):
-        if self.is_client_connected():
-            msg_len = struct.calcsize(">II") + struct.calcsize(">I")
-            msg = struct.pack(">II", struct.calcsize(">I"), MT_STATE_CHANGE_REQ) # make by big
-            msg += struct.pack(">I", state)
             sendMsgToCannon(msg)
             return True
         return False
@@ -516,25 +541,27 @@ class Form1(QMainWindow):
 
         if (state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_UNKNOWN:
             self.editState.setText("UNKNOWN")
-            self.log_message("MT_STATE : UNKNOWN")
+            self.log_message(f"MT_STATE : UNKNOWN_{state_int}")
         elif (state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_SAFE:
             self.editState.setText("SAFE")
-            self.log_message("MT_STATE : SAFE")
+            self.log_message(f"MT_STATE : SAFE_{state_int}")
         elif (state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_PREARMED:
             self.editState.setText("PREARMED")
-            self.log_message("MT_STATE : PREARMED")
+            self.log_message(f"MT_STATE : PREARMED_{state_int}")
         elif (state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_ENGAGE_AUTO:
-            self.editState.setText("MT_STATE : ENGAGE_AUTO")
-            # self.log_message("ENGAGE_AUTO")
+            self.editState.setText("ENGAGE_AUTO")
+            self.log_message(f"MT_STATE : ENGAGE_AUTO_{state_int}")
         elif (state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_ARMED_MANUAL:
-            self.editState.setText("MT_STATE : ARMED_MANUAL") 
-            # self.log_message("ARMED_MANUAL")
+            self.editState.setText("ARMED_MANUAL") 
+            self.log_message(f"MT_STATE : ARMED_MANUAL_{state_int}")
         elif (state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_ARMED:
-            self.editState.setText("MT_STATE : ARMED") 
-            #  self.log_message("ARMED")
+            self.editState.setText("ARMED") 
+            self.log_message(f"MT_STATE : ARMED_{state_int}")
         else:
+            print("MT_STATE_GGGG_recv STATE : ", state_int)
             self.editState.setText("MT_STATE : GGGG") 
-            # self.log_message(f"GGGG")
+            self.log_message(f"MT_STATE : EXCEPTION_{state_int}")
+            # self.send_state_change_request_to_server()
 
     ###################################################################
     # callback_msg 처리할때 MT 메시지 종류에 따라 차등 처리 기능 구현
@@ -547,22 +574,24 @@ class Form1(QMainWindow):
         # len_, type_, rcv_state_ = struct.unpack('>III', message[:12])
         # self.log_message(f"Based on big endian, Received: {len_, type_, rcv_state_}")
         # unpacked_msg_type = struct.unpack(">IIB", message)[1] #read by little
+        # For double check
+        len_ = len(message) - 8
 
         # Unpack the message header
-        len = message[0:4]
-        len = int.from_bytes(len, byteorder='big')
-        type = message[4:8]
-        type = int.from_bytes(type, byteorder='big')
-        print(f"Message Received, size: {len}")
+        len_msg = message[0:4]
+        len_msg = int.from_bytes(len_msg, byteorder='big')
+        type_msg = message[4:8]
+        type_msg = int.from_bytes(type_msg, byteorder='big')
+        print(f"Message Received, size: {len}, {len_}")
 
         # MT_IMAGE는 tcp_protocol에서 직접 보내주므로 little로 변환된 데이터 수신
-        if type == MT_IMAGE:
+        if type_msg == MT_IMAGE:
             # print test
             print("MT_IMAGE Received")
 
             # Buffer to store the received message
-            image_data = bytearray(len)
-            image_data = message[8:len+7]
+            image_data = bytearray(len_msg)
+            image_data = message[8:len_msg+7]
 
             # Show the received image to picturebox
             np_arr = np.frombuffer(image_data, np.uint8)
@@ -573,13 +602,31 @@ class Form1(QMainWindow):
                 bytes_per_line = ch * w
                 qt_image = QImage(img_rgb.data, w, h, bytes_per_line, QImage.Format_RGB888)
                 pixmap = QPixmap.fromImage(qt_image)
+
+                # Add red cross hair in pixmap
+                painter = QPainter(pixmap)
+                pen = QPen(QColor(255, 0, 0), 2)
+                painter.setPen(pen)
+                
+                # Calculate the center of the image
+                center_x = w // 2 # self.pictureBox.width() // 2
+                center_y = h // 2 # self.pictureBox.height() // 2
+
+                self.crosshair_size = 60
+                half_size = self.crosshair_size // 2
+
+                painter.drawLine(center_x - half_size, center_y, center_x + half_size, center_y)
+                painter.drawLine(center_x, center_y - half_size, center_x, center_y + half_size)
+
+                painter.end()
+
                 self.pictureBox.setPixmap(pixmap)
                 self.pictureBox.setScaledContents(True)
 
         # 나머지 MT_MSG 들은 byte 배열이 들어오므로 bit -> little 변환이 필요함, 송신도 마찬가지
-        elif type == MT_STATE:
+        elif type_msg == MT_STATE:
             # print test
-            print("MT_STATE Received")
+            print("MT_STATE Received :", ' '.join(f'0x{byte:02x}' for byte in message))
 
             # Buffer to store the received message
             # rcv_state = bytearray(len)
@@ -589,12 +636,16 @@ class Form1(QMainWindow):
             self.RcvState_Curr = rcv_state
             print("MT_STATE Received as", self.RcvState_Curr, " ", rcv_state)
             self.updateSystemState()
+
             if self.RcvState_Curr != self.RcvState_Prev:
                 self.RcvState_Prev = self.RcvState_Curr
-
-        elif type == MT_ERROR:
+            # if self.RcvState_Curr != self.RcvState_Requested:
+            #     self.send_state_change_request_to_server(self.RcvState_Requested)
+            #     print("MT_STATE request to change as", self.RcvState_Requested)
+                
+        elif type_msg == MT_ERROR:
             # print test
-            print("MT_ERROR Received", type)
+            print("MT_ERROR Received", type_msg)
 
     # ###################################################################
     # # callback 함수를 통해 수신받은 메시지의 endian 구조를 파악

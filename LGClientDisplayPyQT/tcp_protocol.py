@@ -139,12 +139,14 @@ def tcp_ip_thread(frame_queue, ip, port):
                 #key = cv2.waitKey(1)
                 #if key & 0xFF == ord('q'):
                 #    break
-            elif MT_STATE:
+
+            elif type_ == MT_STATE:
                 global cannonStatus
                 valueInt = int.from_bytes(buffer, byteorder='big')
                 print("state: ", buffer, " valueInt: ", valueInt)
                 cannonStatus = valueInt
                 sendMsgToUI(packedData)
+                
             else:
                 print("len_ ", len_, "header type_ ", type_, "data_", int.from_bytes(buffer, byteorder='big'))
                 sendMsgToUI(packedData)
@@ -176,13 +178,17 @@ def sendMsgToCannon(msg):
     typeInt = int.from_bytes(type, byteorder='big')
     valueInt = int.from_bytes(value, byteorder='big')
 
-    print("recieve the msg. from UI for sending msg. to cannon( ", msg, "len: ", len(msg), "type: ", typeInt, "value: ", value, "/", valueInt, ")")
+    # print("recieve the msg. from UI for sending msg. to cannon( ", msg, "len: ", len(msg), "type: ", typeInt, "value: ", value, "/", valueInt, ")")
     if typeInt == MT_TARGET_SEQUENCE:
         # send to image process
         print("type is MT_TARGET_SEQUENCE")
+        clientSock.sendall(msg)
     elif typeInt == MT_STATE_CHANGE_REQ:
         print("type is MT_STATE_CHANGE_REQ / value: ", valueInt)
         cannonStatus = valueInt
+        clientSock.sendall(msg)
+    elif typeInt == MT_PREARM:
+        print("type is MT_PREARM")
         clientSock.sendall(msg)
     else:
         print("type is MT_ELSE")
