@@ -74,10 +74,13 @@ def tcp_ip_thread(frame_queue, ip, port):
         clientSock.connect(serverAddress)
     except socket.error as e:
         print("Failed to connect to server:", e)
+        errorCode = ERR_FAIL_TO_CONNECT
+        packedData = struct.pack(">IIB", 1, MT_ERROR, errorCode)
+        sendMsgToUI(packedData) # ERR_FAIL_TO_CONNECT
         exit()
 
     errorCode = ERR_SUCCESS
-    packedData = struct.pack(">IIB", 9, MT_ERROR, errorCode)
+    packedData = struct.pack(">IIB", 1, MT_ERROR, errorCode)
     sendMsgToUI(packedData)
 
     while True:

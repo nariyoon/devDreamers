@@ -55,12 +55,21 @@ CT_PAN_DOWN_STOP = 0xF7
 CT_FIRE_STOP = 0xEF
 CT_SAFE_TEST = 0xFF
 
+# Define calibration codes
+LT_DEC_X = 0x01
+LT_INC_X = 0x02
+LT_DEC_Y = 0x04
+LT_INC_Y = 0x08
+
 # error code
 ERR_SUCCESS = 0
 ERR_FAIL_TO_CONNECT = 1
 ERR_CONNECTION_LOST = 2
 
 class Form1(QMainWindow):
+    # Model : SocketState
+    SocketState = ERR_CONNECTION_LOST
+    
     # Model : RcsState
     RcvState_Curr = ST_UNKNOWN
     RcvState_Prev = ST_UNKNOWN
@@ -75,6 +84,10 @@ class Form1(QMainWindow):
     user_model = ""
     prearm_code = "12345678" # temporarily code
     engage_order = "0123456789" # temporarily order
+
+    # For counting sent to Robot message
+    CountSentMsg = 0
+    CountFinishedMsg = 0
 
     def __init__(self):
         super().__init__()
@@ -228,13 +241,13 @@ class Form1(QMainWindow):
         port = self.editTCPPort.text()
 
         if not ip:
-             self.log_message(f'Please enter ip address.')
+             self.log_message(f'Please enter IP address.')
         elif not port:
              self.log_message(f'Please enter port number.')
         elif not self.check_ipv4(ip) :
-             self.log_message(f'Not mache IP Address Pattern.')
+             self.log_message(f'Not match IP Address Pattern.')
         elif not self.check_port(port) :
-             self.log_message(f'Port must be 0-65535..')
+             self.log_message(f'Port must be 0-65535.')
         else:
              self.buttonConnect.setEnabled(True)
 
@@ -275,7 +288,7 @@ class Form1(QMainWindow):
 
         self.tcp_thread = threading.Thread(target=common_start, args=(ip, port))
         self.tcp_thread.start()
-        self.log_message("Connected")
+        self.log_message("Connecting.....")
         
         self.user_model.save_to_config(ip, port)
         self.setAllUIEnabled(True, False)
@@ -413,36 +426,42 @@ class Form1(QMainWindow):
     ########################################################################
     # MT_COMMANDS 전송
     def set_command(self, command):
-        # Define the message length and type
-        msg_len = struct.calcsize("B")
-        msg_type = MT_COMMANDS  # Example message type : MT_COMMANDS = 1
+        if self.is_client_connected():
+            # Define the message length and type
+            msg_len = struct.calcsize("B")
+            msg_type = MT_COMMANDS  # Example message type : MT_COMMANDS = 1
 
-        # Pack the message using the same structure as C#'s TMessageCommands
-        message = struct.pack(">IIB", msg_len, msg_type, command) #make by big
-        print("set_command msg ", struct.unpack(">IIB", message)[1])
-        # Get only msg_type
-        unpacked_msg_type = struct.unpack(">IIB", message)[1] #read by little
-        self.log_message(f"msg_type: {unpacked_msg_type}")
-        # self.log_message(f"msg_command", struct.unpack(">IIB", message)[2]) #read by little
+            # Pack the message using the same structure as C#'s TMessageCommands
+            message = struct.pack(">IIB", msg_len, msg_type, command) #make by big
+            print("set_command msg ", struct.unpack(">IIB", message)[1])
+            # Get only msg_type
+            unpacked_msg_type = struct.unpack(">IIB", message)[1] #read by little
+            self.log_message(f"msg_type: {unpacked_msg_type}")
+            # self.log_message(f"msg_command", struct.unpack(">IIB", message)[2]) #read by little
 
-        # Other class example 
-        sendMsgToCannon(message)
-        self.log_message(f"Set command: {command}")
-
+            # Other class example 
+            sendMsgToCannon(message)
+            self.log_message(f"Set command: {command}")
+            return True
+        return False
     ########################################################################
     # Client Socket 연결상태 전송 (업데이트)
     def is_client_connected(self):
         # 클라이언트 연결 상태를 확인하는 함수
-        return True  # 예시로 True 반환, 실제로는 연결 상태를 확인하는 코드 필요
+        if self.SocketState == ERR_SUCCESS:
+            return True  # 예시로 True 반환, 실제로는 연결 상태를 확인하는 코드 필요
+        else:
+            return False  # 예시로 True 반환, 실제로는 연결 상태를 확인하는 코드 필요
 
     ########################################################################
     # MT_CALIB_COMMANDS 전송
     def send_calib_to_server(self, code):
         if self.is_client_connected():
-            msg_len = struct.calcsize(">II") + struct.calcsize(">B")
+            # msg_len = struct.calcsize(">II") + struct.calcsize(">B")
             msg = struct.pack(">II", struct.calcsize(">B"), MT_CALIB_COMMANDS)
             msg += struct.pack(">B", code)
             sendMsgToCannon(msg)
+            self.log_message(f"Send calib message: {code}")
             return True
         return False
 
@@ -563,26 +582,37 @@ class Form1(QMainWindow):
             self.log_message(f"MT_STATE : EXCEPTION_{state_int}")
             # self.send_state_change_request_to_server()
 
+    def updateSocketState(self, socketstate):
+        if socketstate == ERR_SUCCESS:
+            self.SocketState = ERR_SUCCESS
+            self.log_message("Robot is connected successfully")
+
+        elif socketstate == ERR_FAIL_TO_CONNECT:
+            self.SocketState = ERR_FAIL_TO_CONNECT
+            self.setAllUIEnabled(False, False)
+            # self.buttonConnect.setEnabled(True)
+            # self.buttonDisconnect.setEnabled(False)
+            self.log_message("Robot is failed to connect")
+
+        elif socketstate == ERR_CONNECTION_LOST:
+            self.SocketState = ERR_CONNECTION_LOST
+            self.setAllUIEnabled(False, False)
+            # self.buttonConnect.setEnabled(True)
+            # self.buttonDisconnect.setEnabled(False)
+            self.log_message("Robot's connection is lost")
+
     ###################################################################
     # callback_msg 처리할때 MT 메시지 종류에 따라 차등 처리 기능 구현
     ###################################################################
     def callback_msg(self, message):
-        # # check little and big endians
-        # len_, type_, rcv_state_ = struct.unpack('<III', message[:12])
-        # # rcv_state = self.process_message_little_endian(message)
-        # self.log_message(f"Based on little endian, Received: {len_, type_, rcv_state_}")
-        # len_, type_, rcv_state_ = struct.unpack('>III', message[:12])
-        # self.log_message(f"Based on big endian, Received: {len_, type_, rcv_state_}")
-        # unpacked_msg_type = struct.unpack(">IIB", message)[1] #read by little
         # For double check
         len_ = len(message) - 8
-
         # Unpack the message header
         len_msg = message[0:4]
         len_msg = int.from_bytes(len_msg, byteorder='big')
         type_msg = message[4:8]
         type_msg = int.from_bytes(type_msg, byteorder='big')
-        print(f"Message Received, size: {len}, {len_}")
+        print(f"Message Received, size: {len_msg}, {len_}")
 
         # MT_IMAGE는 tcp_protocol에서 직접 보내주므로 little로 변환된 데이터 수신
         if type_msg == MT_IMAGE:
@@ -645,84 +675,85 @@ class Form1(QMainWindow):
                 
         elif type_msg == MT_ERROR:
             # print test
-            print("MT_ERROR Received", type_msg)
+            print("Socket Message Received", type_msg)
+            print("MT_STATE Received :", ' '.join(f'0x{byte:02x}' for byte in message))
 
-    # ###################################################################
-    # # callback 함수를 통해 수신받은 메시지의 endian 구조를 파악
-    # ###################################################################
-    # def process_message_little_endian(message):
-    #     if len(message) != 12:
-    #         raise ValueError("Message must be 12 bytes long")
+            # ERR_SUCCESS = 0
+            # ERR_FAIL_TO_CONNECT = 1
+            # ERR_CONNECTION_LOST = 2
 
-    #     # 4바이트 len, 4바이트 type, 4바이트 rcv_state를 little endian 방식으로 해석
-    #     len_, type_, rcv_state = struct.unpack('<III', message[:12])
-
-    #     if type_ == MT_STATE:
-    #         # rcv_state를 저장
-    #         print(f"Received state (little endian): {rcv_state}")
-    #         return rcv_state
-    #     else:
-    #         print("Received non-state message")
-    #         return None
-
-    # def process_message_big_endian(message):
-    #     if len(message) != 12:
-    #         raise ValueError("Message must be 12 bytes long")
-
-    #     # 4바이트 len, 4바이트 type, 4바이트 rcv_state를 big endian 방식으로 해석
-    #     len_, type_, rcv_state = struct.unpack('>III', message[:12])
-
-    #     if type_ == MT_STATE:
-    #         # rcv_state를 저장
-    #         print(f"Received state (big endian): {rcv_state}")
-    #         return rcv_state
-    #     else:
-    #         print("Received non-state message")
-    #         return None
+            socket_state = struct.unpack(">IIB", message)[2]
+            socket_state = int(socket_state)
+            # self.SocketState = socket_state
+            # print("MT_STATE Received as", self.RcvState_Curr, " ", rcv_state)
+            print("Socket Message Received", socket_state)
+            self.updateSocketState(socket_state)
 
     # Using heartbeat timer, in order to detect the robot control sw to set abnormal state
     def HeartBeatTimer_event(self):
         self.log_message("Timer event: sending message to cannon")
 
     def keyPressEvent(self, event):
-        key_map = {
-            Qt.Key_I: CT_PAN_UP_START,
-            Qt.Key_Up: CT_PAN_UP_START,
-            Qt.Key_L: CT_PAN_RIGHT_START,
-            Qt.Key_Right: CT_PAN_RIGHT_START,
-            Qt.Key_J: CT_PAN_LEFT_START,
-            Qt.Key_Left: CT_PAN_LEFT_START,
-            Qt.Key_M: CT_PAN_DOWN_START,
-            Qt.Key_Down: CT_PAN_DOWN_START,
-            Qt.Key_F: CT_FIRE_START,
-            Qt.Key_Return: CT_FIRE_START,
-            Qt.Key_S: CT_SAFE_TEST
-        }
-
-        # if self.RcvState_Curr == ST_ARMED_MANUAL: 
-        if event.key() in key_map:
-            if key_map[event.key()] != CT_SAFE_TEST:
+        # key_map = {
+        #     Qt.Key_P: ST_PREARMED,
+        #     Qt.Key_S: ST_SAFE,
+        #     Qt.Key_C: ST_CALIB_ON
+        # }
+        # if event.key() in key_map:
+        #     self.RcvState_Curr = int(key_map[event.key()])
+        #     self.updateSystemState()
+        if self.RcvState_Curr == ST_PREARMED or self.RcvState_Curr == ST_ARMED_MANUAL :
+            key_map = {
+                Qt.Key_I: CT_PAN_UP_START,
+                # Qt.Key_Up: CT_PAN_UP_START,
+                Qt.Key_L: CT_PAN_RIGHT_START,
+                # Qt.Key_Right: CT_PAN_RIGHT_START,
+                Qt.Key_J: CT_PAN_LEFT_START,
+                # Qt.Key_Left: CT_PAN_LEFT_START,
+                Qt.Key_M: CT_PAN_DOWN_START,
+                # Qt.Key_Down: CT_PAN_DOWN_START,
+                Qt.Key_F: CT_FIRE_START,
+                # Qt.Key_Return: CT_FIRE_START,
+                # Qt.Key_S: CT_SAFE_TEST
+            }
+            # if self.RcvState_Curr == ST_ARMED_MANUAL: 
+            if event.key() in key_map:
                 self.set_command(key_map[event.key()])
-            elif key_map[event.key()] == CT_SAFE_TEST:
-                self.send_state_change_request_to_server(ST_SAFE)
+                self.CountSentCmdMsg += 1
+                print("Count Sent Command Key Event : ", self.CountSentCmdMsg)
 
-    def keyReleaseEvent(self, event):
-        key_map = {
-            Qt.Key_I: CT_PAN_UP_STOP,
-            Qt.Key_Up: CT_PAN_UP_STOP,
-            Qt.Key_L: CT_PAN_RIGHT_STOP,
-            Qt.Key_Right: CT_PAN_RIGHT_STOP,
-            Qt.Key_J: CT_PAN_LEFT_STOP,
-            Qt.Key_Left: CT_PAN_LEFT_STOP,
-            Qt.Key_M: CT_PAN_DOWN_STOP,
-            Qt.Key_Down: CT_PAN_DOWN_STOP,
-            Qt.Key_F: CT_FIRE_STOP,
-            Qt.Key_Return: CT_FIRE_STOP
-        }
+        elif (self.RcvState_Curr & ST_CALIB_ON) == ST_CALIB_ON :
+            key_map = {
+                Qt.Key_I: LT_INC_Y,
+                Qt.Key_L: LT_INC_X,
+                Qt.Key_J: LT_DEC_X,
+                Qt.Key_M: LT_DEC_Y,
+            }
+            # if self.RcvState_Curr == ST_CALIB_ON: 
+            if event.key() in key_map:
+                self.send_calib_to_server(key_map[event.key()])
+                self.CountSentCalibMsg += 1
+                print("Count Sent Calibration Key Event : ", self.CountSentCalibMsg)
 
-        # if self.RcvState_Curr == ST_ARMED_MANUAL: 
-        if event.key() in key_map:
-            self.set_command(key_map[event.key()])
+    # def keyReleaseEvent(self, event):
+    #     key_map = {
+    #         Qt.Key_I: CT_PAN_UP_STOP,
+    #         Qt.Key_Up: CT_PAN_UP_STOP,
+    #         Qt.Key_L: CT_PAN_RIGHT_STOP,
+    #         Qt.Key_Right: CT_PAN_RIGHT_STOP,
+    #         Qt.Key_J: CT_PAN_LEFT_STOP,
+    #         Qt.Key_Left: CT_PAN_LEFT_STOP,
+    #         Qt.Key_M: CT_PAN_DOWN_STOP,
+    #         Qt.Key_Down: CT_PAN_DOWN_STOP,
+    #         Qt.Key_F: CT_FIRE_STOP,
+    #         Qt.Key_Return: CT_FIRE_STOP
+    #     }
+
+    #     # if self.RcvState_Curr == ST_ARMED_MANUAL: 
+    #     if event.key() in key_map:
+    #         # self.set_command(key_map[event.key()])
+    #         self.CountFinishedMsg += 1
+    #         print("Count Finished Key Event : ", self.CountFinishedMsg)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
