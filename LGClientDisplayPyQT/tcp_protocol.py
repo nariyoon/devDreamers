@@ -22,6 +22,8 @@ MT_PREARM = 5
 MT_STATE = 6
 MT_STATE_CHANGE_REQ = 7
 MT_CALIB_COMMANDS = 8
+MT_TARGET_DIFF = 9
+MT_ERROR = 10
 
 # cannon status
 UNKNOWN = 0
@@ -33,6 +35,11 @@ ARMED = 16 #0x10
 FIRING = 32 #0x20
 LASER_ON = 64 #0x40
 CALIB_ON = 128 #0x80
+
+# error code
+ERR_SUCCESS = 0
+ERR_FAIL_TO_CONNECT = 1
+ERR_CONNECTION_LOST = 2
 
 # testtest
 CAP_PROP_FRAME_WIDTH = 1920
@@ -48,16 +55,21 @@ class TMesssageHeader:
 clientSock = 0
 cannonStatus = UNKNOWN
 
+# Define for updating image to UI
+uimsg_update_callback = None
+
+# Callback function for sending image to UI
+def set_uimsg_update_callback(callback):
+    # print("Callback function parameter sent.")
+    global uimsg_update_callback
+    uimsg_update_callback = callback
 
 # frame_queue와 processed_queue를 tcp_protocol.py로 옮김
 frame_queue = Queue(maxsize=20)
 processed_queue = Queue(maxsize=20)
 
-
 debug_dir = os.path.join(os.getcwd(), 'debug')
 os.makedirs(debug_dir, exist_ok=True)
-
-
 
 def tcp_ip_thread(ip, port, img_model):
     """
@@ -73,8 +85,17 @@ def tcp_ip_thread(ip, port, img_model):
         clientSock.connect(serverAddress)
     except socket.error as e:
         print("Failed to connect to server:", e)
+        errorCode = ERR_FAIL_TO_CONNECT
+        packedData = struct.pack(">IIB", 1, MT_ERROR, errorCode)
+        sendMsgToUI(packedData) # ERR_FAIL_TO_CONNECT
         exit()
+
     frame_cnt = 0
+
+    errorCode = ERR_SUCCESS
+    packedData = struct.pack(">IIB", 1, MT_ERROR, errorCode)
+    sendMsgToUI(packedData)
+
     while True:
         try:
             # Receive the message header
@@ -110,8 +131,8 @@ def tcp_ip_thread(ip, port, img_model):
 
             if type_ == MT_IMAGE:
                 # TODO: send image to ui when state is not auto-engage mode (if cannonState != ENGAGE_AUTO)
-
-            
+                # sendMsgToUI(packedData)
+                # print("Image sending")
 
                 # 이미지를 디코딩
                 imageMat = cv2.imdecode(np.frombuffer(buffer, dtype=np.uint8), cv2.IMREAD_COLOR)
@@ -142,8 +163,7 @@ def tcp_ip_thread(ip, port, img_model):
                     sendMsgToUI(packed_data)
                 else:
                     sendMsgToUI(packedData)
-
-                frame_cnt += 1    
+                    frame_cnt += 1    
                 # 이미지 크기 확인 (옵션: 필요에 따라 제한 설정)
                 #height, width = imageMat.shape[:2]
                 #print(f"height {height} width {width}")
@@ -175,7 +195,7 @@ def tcp_ip_thread(ip, port, img_model):
                 #key = cv2.waitKey(1)
                 #if key & 0xFF == ord('q'):
                 #    break
-            elif MT_STATE:
+            elif type_ == MT_STATE:
                 global cannonStatus
                 valueInt = int.from_bytes(buffer, byteorder='big')
                 print("state: ", buffer, " valueInt: ", valueInt)
@@ -186,10 +206,16 @@ def tcp_ip_thread(ip, port, img_model):
                 sendMsgToUI(packedData)
 
         except socket.error as e:
-            if e.errno == errno.ECONNRESET:
-                print("Client disconnected.")
+            errorCode = ERR_CONNECTION_LOST
+            if e.errno == errno.ETIMEDOUT or e.errno == errno.ECONNREFUSED:
+                print("fail to connect.")
+                errorCode = ERR_FAIL_TO_CONNECT
             else:
                 print("Connection lost:", str(e))
+
+            # send error code to UI
+            packedData = struct.pack(">IIB", 9, MT_ERROR, errorCode)
+            sendMsgToUI(packedData)
             break
 
     #cv2.destroyAllWindows()
@@ -206,15 +232,29 @@ def sendMsgToCannon(msg):
     typeInt = int.from_bytes(type, byteorder='big')
     valueInt = int.from_bytes(value, byteorder='big')
 
-    print("recieve the msg. from UI for sending msg. to cannon( ", msg, "len: ", len(msg), "type: ", typeInt, "value: ", value, "/", valueInt, ")")
+    # print("recieve the msg. from UI for sending msg. to cannon( ", msg, "len: ", len(msg), "type: ", typeInt, "value: ", value, "/", valueInt, ")")
     if typeInt == MT_TARGET_SEQUENCE:
         # send to image process
         print("type is MT_TARGET_SEQUENCE")
+		# clientSock.sendall(msg)
     elif typeInt == MT_STATE_CHANGE_REQ:
         print("type is MT_STATE_CHANGE_REQ / value: ", valueInt)
         cannonStatus = valueInt
+        clientSock.sendall(msg)
+    elif typeInt == MT_PREARM:
+        print("type is MT_PREARM")
         clientSock.sendall(msg)
     else:
         print("type is MT_ELSE")
         clientSock.sendall(msg)
 
+# def sendMsgToUI(msg):
+#     # print("send command to UI(len: ", len(msg), ")")
+#     # send callback to UI
+    
+#     # recv_callback(msg)
+#     if uimsg_update_callback:
+#         print("Callback function is called.")
+#         uimsg_update_callback(msg)
+#     else:
+#         print("No callback function set for image update.")
