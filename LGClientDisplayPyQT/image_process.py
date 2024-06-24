@@ -236,7 +236,7 @@ def get_result_model():
     return result_data
 
 def init_image_processing_model():
-    model = YOLO(f"{script_dir}/image_algo/models/best_960x540_real_background.pt")
+    model = YOLO(f"{script_dir}/image_algo/models/best_960x544_50_2_final.pt")
     return model
 
 
