@@ -7,7 +7,8 @@ import struct
 from queue import Queue, Full
 from image_algo.yolov8_algo import YOLO_Detector
 from image_algo.tflite_algo import ObjectDetector
-#from message_utils import sendMsgToUI
+from ultralytics import YOLO
+import numpy as np
 
 # Add the parent directory of `image_algo` to sys.path
 script_dir = os.path.dirname(os.path.realpath(__file__))
@@ -88,103 +89,80 @@ def display_initializing_frame(frame, algorithms, ready_events, elapsed_time):
                         (255, 255, 255), 2, cv2.LINE_AA)
     return draw_frame
 
-#
-
-
-from ultralytics import YOLO
-
-# def image_processing_handler(model, frame):
-#     if frame is None:
-#         return -1
-
-#     # 디텍션 수행
-#     results = model.predict(frame, imgsz=640)
-
-#     # 결과 이미지 그리기
-#     for result in results:
-#         boxes = result.boxes
-#         for box in boxes:
-#             if box.conf[0].cpu().item() >= 0.5:  # 확률이 0.5 이상인 경우에만 그리기
-#                 coords = box.xyxy[0].cpu().numpy()
-#                 x1, y1, x2, y2 = map(int, coords)
-#                 label = f"{int(box.cls[0].cpu().item())} {box.conf[0].cpu().item():.2f}"
-#                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-#                 cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
-
-#     # draw_frame을 UI로 보내기 위해 packed_data로 변환합니다.
-#     buffer = cv2.imencode('.jpg', frame)[1].tobytes()
-#     msg_len = len(buffer)
-#     msg_type = 3
-#     format_string = f'>II{msg_len}s'
-#     packed_data = struct.pack(format_string, msg_len, msg_type, buffer)
-
-#     return packed_data
-
-# def init_image_processing_model():
-#     model = YOLO(f"{script_dir}/image_algo/models/best_14.pt")
-#     return model
-
-
-
-
-
-
-def image_processing_handler(model, frame):
-    if frame is None:
-        return -1
-
-    # 디텍션 수행
-    results = model.predict(frame, imgsz=640)
-
-    # # 결과 이미지 그리기
-    # for result in results:
-    #     boxes = result.boxes
-    #     for box in boxes:
-    #         if box.conf[0].cpu().item() >= 0.5:  # 확률이 0.5 이상인 경우에만 그리기
-    #             coords = box.xyxy[0].cpu().numpy()
-    #             x1, y1, x2, y2 = map(int, coords)
-    #             label = f"{int(box.cls[0].cpu().item())} {box.conf[0].cpu().item():.2f}"
-    #             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-    #             cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
-
-    # # draw_frame을 UI로 보내기 위해 packed_data로 변환합니다.
-    # buffer = cv2.imencode('.jpg', frame)[1].tobytes()
-    # msg_len = len(buffer)
-    # msg_type = 3
-    # format_string = f'>II{msg_len}s'
-    # packed_data = struct.pack(format_string, msg_len, msg_type, buffer)
-
-    return results
-
 
 result_data = None
 
 def set_result_model(results):
     global result_data
     result_data = results.copy()
-
+    print(result_data)
+ 
 def get_result_model():
-    global result_data  # 글로벌 변수임을 선언
+    global result_data
     return result_data
 
 def init_image_processing_model():
     model = YOLO(f"{script_dir}/image_algo/models/best_960x544_50_2_final.pt")
     return model
 
-
-def image_processing_thread(frame_queue, processed_queue, model):
+def image_processing_thread(frame_queue, model):
+    DATA = {}
     while True:
         frame = frame_queue.get()
         if frame is None:
             break
-        processed_data = image_processing_handler(model, frame)
-        processed_queue.put(processed_data)
 
-def send_image_to_ui_thread(processed_queue):
-    #from message_utils import sendMsgToUI
-    while True:
-        processed_data = processed_queue.get()
-        if processed_data is None:
+        imageMat = cv2.imdecode(np.frombuffer(frame, dtype=np.uint8), cv2.IMREAD_COLOR)
+        results = model.predict(imageMat, imgsz=[960, 544], verbose=False)
+
+        target_info = []
+        box_info = []
+        for result in results:
+            boxes = result.boxes
+
+            score = boxes.conf[0].cpu().item()
+            if score < 0.5:
+                continue
+
+            for box in boxes:
+                coords = box.xyxy[0].cpu().numpy()
+                score = box.conf[0].cpu().item()
+                if score < 0.5:
+                    continue
+                x1, y1, x2, y2 = map(int, coords)
+
+                # 라벨 번호와 박스 중심점 계산
+                label = f"{int(box.cls[0].cpu().item())}"
+                center_x = (x1 + x2) / 2
+                center_y = (y1 + y2) / 2
+
+                # 정보를 리스트에 추가
+                target_info.append({
+                    "label": label,
+                    "center": [round(center_x, 1), round(center_y, 1)]
+                })
+
+                box_info.append({
+                    "label": label,
+                    "bbox": [x1, y1, x2, y2]
+                })
+
+                # 박스와 라벨 그리기
+                cv2.rectangle(imageMat, (x1, y1), (x2, y2), (0, 255, 0), 1)
+                cv2.putText(imageMat, label, (x1, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 2)
+
+                # 중심점 빨간색 점 그리기
+                cv2.circle(imageMat, (int(center_x), int(center_y)), 3, (0, 0, 255), -1)
+
+
+        # DATA 딕셔너리에 업데이트
+        DATA['target_info'] = target_info
+        DATA['box_info'] = box_info
+        set_result_model(DATA)
+        cv2.imshow('Detection and Classification Result', imageMat)
+
+        key = cv2.waitKey(1)
+        if key == ord('q'):
+            cv2.destroyAllWindows()
             break
-        # sendMsgToUI(processed_data)
-        set_result_model(processed_data)
+

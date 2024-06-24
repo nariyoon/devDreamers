@@ -4,7 +4,7 @@ import struct
 import errno
 import cv2
 import numpy as np
-from image_process import image_processing_handler, get_result_model
+from image_process import get_result_model
 from queue import Queue, Full
 #from message_utils import sendMsgToUI
 import os
@@ -57,7 +57,6 @@ def set_uimsg_update_callback(callback):
 
 # frame_queue와 processed_queue를 tcp_protocol.py로 옮김
 frame_queue = Queue(maxsize=20)
-processed_queue = Queue(maxsize=20)
 
 def tcp_ip_thread(ip, port, img_model):
     """
@@ -116,31 +115,14 @@ def tcp_ip_thread(ip, port, img_model):
             packedData = struct.pack(f'>II{len(buffer)}s', len_, type_, buffer)
 
             if type_ == MT_IMAGE:
-                # 이미지를 디코딩
-                imageMat = cv2.imdecode(np.frombuffer(buffer, dtype=np.uint8), cv2.IMREAD_COLOR)
-                frame_queue.put(imageMat)
-                results = get_result_model()
-                if results != None:
-                    # 결과 이미지 그리기
-                    for result in results:
-                        boxes = result.boxes
-                        for box in boxes:
-                            if box.conf[0].cpu().item() >= 0.5:  # 확률이 0.5 이상인 경우에만 그리기
-                                coords = box.xyxy[0].cpu().numpy()
-                                x1, y1, x2, y2 = map(int, coords)
-                                label = f"{int(box.cls[0].cpu().item())} {box.conf[0].cpu().item():.2f}"
-                                cv2.rectangle(imageMat, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                                cv2.putText(imageMat, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
 
-                    new_buffer = cv2.imencode('.jpg', imageMat)[1].tobytes()
-                    msg_len = len(new_buffer)
-                    msg_type = 3
-                    format_string = f'>II{msg_len}s'
-                    packed_data = struct.pack(format_string, msg_len, msg_type, new_buffer)
-                    sendMsgToUI(packed_data)
+                sendMsgToUI(packedData)
 
-                else:
-                    sendMsgToUI(packedData)
+                image_buffer = buffer.copy()
+                if frame_queue.full():
+                        frame_queue.get()  # 가장 오래된 항목을 드랍
+                frame_queue.put(image_buffer)                
+
 
             else:
                 print("len_ ", len_, "header type_ ", type_, "data_", int.from_bytes(buffer, byteorder='big'))
