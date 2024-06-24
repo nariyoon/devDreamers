@@ -6,12 +6,8 @@ import cv2
 import numpy as np
 from image_process import image_processing_handler, get_result_model
 from queue import Queue, Full
-from message_utils import sendMsgToUI
+#from message_utils import sendMsgToUI
 import os
-
-#from cmd import handle_command
-# from RemoteUIPyQT_sendCmd import recv_callback
-# from tcp_protocol import tcp_ip_thread
 
 # Define message types
 MT_COMMANDS = 1
@@ -41,10 +37,6 @@ ERR_SUCCESS = 0
 ERR_FAIL_TO_CONNECT = 1
 ERR_CONNECTION_LOST = 2
 
-# testtest
-CAP_PROP_FRAME_WIDTH = 1920
-CAP_PROP_FRAME_HEIGHT = 1080
-
 # Define message structures
 class TMesssageHeader:
     def __init__(self, len_, type_):
@@ -53,7 +45,6 @@ class TMesssageHeader:
 
 # global variables
 clientSock = 0
-cannonStatus = UNKNOWN
 
 # Define for updating image to UI
 uimsg_update_callback = None
@@ -67,9 +58,6 @@ def set_uimsg_update_callback(callback):
 # frame_queue와 processed_queue를 tcp_protocol.py로 옮김
 frame_queue = Queue(maxsize=20)
 processed_queue = Queue(maxsize=20)
-
-debug_dir = os.path.join(os.getcwd(), 'debug')
-os.makedirs(debug_dir, exist_ok=True)
 
 def tcp_ip_thread(ip, port, img_model):
     """
@@ -89,8 +77,6 @@ def tcp_ip_thread(ip, port, img_model):
         packedData = struct.pack(">IIB", 1, MT_ERROR, errorCode)
         sendMsgToUI(packedData) # ERR_FAIL_TO_CONNECT
         exit()
-
-    frame_cnt = 0
 
     errorCode = ERR_SUCCESS
     packedData = struct.pack(">IIB", 1, MT_ERROR, errorCode)
@@ -130,16 +116,8 @@ def tcp_ip_thread(ip, port, img_model):
             packedData = struct.pack(f'>II{len(buffer)}s', len_, type_, buffer)
 
             if type_ == MT_IMAGE:
-                # TODO: send image to ui when state is not auto-engage mode (if cannonState != ENGAGE_AUTO)
-                # sendMsgToUI(packedData)
-                # print("Image sending")
-
                 # 이미지를 디코딩
                 imageMat = cv2.imdecode(np.frombuffer(buffer, dtype=np.uint8), cv2.IMREAD_COLOR)
-
-                save_path = os.path.join(debug_dir, f"frame_{int(frame_cnt)}.jpg")
-                cv2.imwrite(save_path, imageMat)
-
                 frame_queue.put(imageMat)
                 results = get_result_model()
                 if results != None:
@@ -159,66 +137,21 @@ def tcp_ip_thread(ip, port, img_model):
                     msg_type = 3
                     format_string = f'>II{msg_len}s'
                     packed_data = struct.pack(format_string, msg_len, msg_type, new_buffer)
-
                     sendMsgToUI(packed_data)
+
                 else:
                     sendMsgToUI(packedData)
-                    frame_cnt += 1    
-                # 이미지 크기 확인 (옵션: 필요에 따라 제한 설정)
-                #height, width = imageMat.shape[:2]
-                #print(f"height {height} width {width}")
 
-                # 이미지 크기 조정 (다른 곳에서 사용하는 포맷과 동일하게)
-                # imageMat = cv2.resize(imageMat, (CAP_PROP_FRAME_WIDTH, CAP_PROP_FRAME_HEIGHT))
-
-                # Put the image into the queue (if image size is valid)
-                # try:
-                #     frame_queue.put(imageMat, timeout=1)
-                # except Full:
-                #     print("Queue is full. Discarding oldest frame.")
-                #     frame_queue.get()
-                #     frame_queue.put(imageMat)
-                # image_detect = image_processing_handler(img_model, imageMat)
-                # sendMsgToUI(image_detect)
-
-                # 수신한 이미지를 큐에 추가하여 처리하도록 함
-                # 원본 이미지를 UI로 바로 전송
-                # ui_image = cv2.imencode('.jpg', imageMat)[1].tobytes()
-                # msg_len = len(ui_image)
-                # msg_type = 3
-                # format_string = f'>II{msg_len}s'
-                # packed_data = struct.pack(format_string, msg_len, msg_type, ui_image)
-                # sendMsgToUI(packed_data)
-
-
-                #cv2.imshow('camera', imageMat)
-                #key = cv2.waitKey(1)
-                #if key & 0xFF == ord('q'):
-                #    break
-            elif type_ == MT_STATE:
-                global cannonStatus
-                valueInt = int.from_bytes(buffer, byteorder='big')
-                print("state: ", buffer, " valueInt: ", valueInt)
-                cannonStatus = valueInt
-                sendMsgToUI(packedData)
             else:
                 print("len_ ", len_, "header type_ ", type_, "data_", int.from_bytes(buffer, byteorder='big'))
                 sendMsgToUI(packedData)
 
         except socket.error as e:
-            errorCode = ERR_CONNECTION_LOST
-            if e.errno == errno.ETIMEDOUT or e.errno == errno.ECONNREFUSED:
-                print("fail to connect.")
-                errorCode = ERR_FAIL_TO_CONNECT
-            else:
-                print("Connection lost:", str(e))
-
-            # send error code to UI
-            packedData = struct.pack(">IIB", 9, MT_ERROR, errorCode)
+            print("Connection lost:", str(e))
+            packedData = struct.pack(">IIB", 9, MT_ERROR, ERR_CONNECTION_LOST)
             sendMsgToUI(packedData)
             break
 
-    #cv2.destroyAllWindows()
     clientSock.close()
     print("Network Thread Exit")
 
@@ -232,11 +165,12 @@ def sendMsgToCannon(msg):
     typeInt = int.from_bytes(type, byteorder='big')
     valueInt = int.from_bytes(value, byteorder='big')
 
-    # print("recieve the msg. from UI for sending msg. to cannon( ", msg, "len: ", len(msg), "type: ", typeInt, "value: ", value, "/", valueInt, ")")
+    print("msg: ", msg, "len: ", len(msg), "type: ", typeInt, "value: ", value)
     if typeInt == MT_TARGET_SEQUENCE:
-        # send to image process
-        print("type is MT_TARGET_SEQUENCE")
-		# clientSock.sendall(msg)
+        print("type is MT_TARGET_SEQUENCE: ", value)
+        buildData = buildTagetOrientation(value)
+        print("build msg.: ", buildData)
+        clientSock.sendall(buildData)
     elif typeInt == MT_STATE_CHANGE_REQ:
         print("type is MT_STATE_CHANGE_REQ / value: ", valueInt)
         cannonStatus = valueInt
@@ -248,13 +182,44 @@ def sendMsgToCannon(msg):
         print("type is MT_ELSE")
         clientSock.sendall(msg)
 
-# def sendMsgToUI(msg):
-#     # print("send command to UI(len: ", len(msg), ")")
-#     # send callback to UI
+def sendMsgToUI(msg):
+    if uimsg_update_callback:
+        uimsg_update_callback(msg)
+    else:
+        print("No callback function set for image update.")
+
+def buildTagetOrientation(msg):
+    print("target sequence: ", msg)
+    # get target orientation
+
+    target = [500, 500]
+    data = bytearray()
+
+    cnt = 0
+    buffer = [0, ]
+    for i in msg:
+        print("i: ", i)
+        if i != 0:
+            buffer[cnt] = i - 48
+            cnt = cnt + 1
+
+    # add length and type
+    dataLen = ((cnt * 2) + 1) * 4 # total cnt(4byte) + x coordiate(4byte) + y coordinate(4byte)
+    data.extend(struct.pack('>II', dataLen, MT_TARGET_DIFF))
+
+    # add target amount
+    data.extend(struct.pack('>I', cnt))
     
-#     # recv_callback(msg)
-#     if uimsg_update_callback:
-#         print("Callback function is called.")
-#         uimsg_update_callback(msg)
-#     else:
-#         print("No callback function set for image update.")
+    # add target value
+    for value in target:
+        convertValue = send_float(value)
+        data.extend(struct.pack('>I', convertValue))
+
+    return data
+
+def send_float(number):
+    # float를 4바이트 네트워크 바이트 순서의 정수로 변환
+    packed_float = struct.pack('>f', number)  # '>'는 big-endian을 의미함
+    uint32_val = struct.unpack('>I', packed_float)[0]  # 4바이트의 네트워크 순서의 정수로 변환
+    
+    return uint32_val

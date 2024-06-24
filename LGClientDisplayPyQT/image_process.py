@@ -7,7 +7,7 @@ import struct
 from queue import Queue, Full
 from image_algo.yolov8_algo import YOLO_Detector
 from image_algo.tflite_algo import ObjectDetector
-from message_utils import sendMsgToUI
+#from message_utils import sendMsgToUI
 
 # Add the parent directory of `image_algo` to sys.path
 script_dir = os.path.dirname(os.path.realpath(__file__))
@@ -88,75 +88,7 @@ def display_initializing_frame(frame, algorithms, ready_events, elapsed_time):
                         (255, 255, 255), 2, cv2.LINE_AA)
     return draw_frame
 
-def process_images(algorithms, frame_queue):
-    print("process_images start")
-    processed_queue = Queue()
-
-    debug_dir = os.path.join(os.getcwd(), 'debug')
-    os.makedirs(debug_dir, exist_ok=True)
-
-    # 첫 번째 이미지를 대기
-    first_image = frame_queue.get()
-    ready_events = initialize_algorithms(algorithms, first_image)
-
-    img_thread = threading.Thread(target=image_processing_task, args=(frame_queue, processed_queue, algorithms, ready_events))
-    img_thread.start()
-
-    frame_cnt = 0
-    init_start_time = time.time()
-
-    # last_save_time = time.time()
-    while True:
-        frame = frame_queue.get()
-
-        # height, width = frame.shape()
-        # print(f" height {height} width {width}")
-
-        if frame is None:
-            break
-
-        # 모든 알고리즘이 초기화되었는지 확인
-        all_initialized = all(event.is_set() for event in ready_events)
-        elapsed_time = time.time() - init_start_time
-        if not all_initialized and elapsed_time < INIT_TIME:
-            draw_frame = display_initializing_frame(frame, algorithms, ready_events, elapsed_time)
-        else:
-            if not all_initialized:
-                for event in ready_events:
-                    event.set()  # 타임아웃 후 모든 이벤트 설정
-            processed_frame = processed_queue.get() if not processed_queue.empty() else frame
-            draw_frame = processed_frame.copy()
-
-        # 여기서 draw_frame을 UI로 보내기 위해 packed_data로 변환합니다.
-        draw_frame = cv2.resize(draw_frame, (1920, 1080))
-        buffer = cv2.imencode('.jpg', draw_frame)[1].tobytes()
-        msg_len = len(buffer)
-        msg_type = 3
-        format_string = f'>II{msg_len}s'
-        # print("img  header len_ ", msg_len, "header type_ ", msg_type)
-        packed_data = struct.pack(format_string, msg_len, msg_type, buffer)
-        sendMsgToUI(packed_data)
-
-        # 1초마다 debug 폴더에 이미지 저장
-
-        # save_path = os.path.join(debug_dir, f"frame_{int(frame_cnt)}.jpg")
-        # cv2.imwrite(save_path, frame)
-        # cv2.imshow('Frame', draw_frame)
-
-        # key = cv2.waitKey(1)
-        # if key & 0xFF == ord('q'):
-        #     break
-
-        frame_cnt += 1
-
-    frame_queue.put(None)
-    processed_queue.put(None)
-    # cv2.destroyAllWindows()
-
-    img_thread.join()
-
-    return
-
+#
 
 
 from ultralytics import YOLO
@@ -249,7 +181,7 @@ def image_processing_thread(frame_queue, processed_queue, model):
         processed_queue.put(processed_data)
 
 def send_image_to_ui_thread(processed_queue):
-    from message_utils import sendMsgToUI
+    #from message_utils import sendMsgToUI
     while True:
         processed_data = processed_queue.get()
         if processed_data is None:

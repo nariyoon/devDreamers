@@ -13,7 +13,7 @@ from usermodel.usermodel import UserModel
 from tcp_protocol import sendMsgToCannon, set_uimsg_update_callback
 from common import common_start
 from queue import Queue
-from message_utils import set_image_update_callback
+#from message_utils import set_image_update_callback
 
 # Define robotcontrolsw(RCV) state types
 ST_UNKNOWN      = 0x00
@@ -612,12 +612,12 @@ class Form1(QMainWindow):
         len_msg = int.from_bytes(len_msg, byteorder='big')
         type_msg = message[4:8]
         type_msg = int.from_bytes(type_msg, byteorder='big')
-        print(f"Message Received, size: {len_msg}, {len_}")
+        #print(f"Message Received, size: {len_msg}, {len_}")
 
         # MT_IMAGE는 tcp_protocol에서 직접 보내주므로 little로 변환된 데이터 수신
         if type_msg == MT_IMAGE:
             # print test
-            print("MT_IMAGE Received")
+            #print("MT_IMAGE Received")
 
             # Buffer to store the received message
             image_data = bytearray(len_msg)
@@ -700,12 +700,12 @@ class Form1(QMainWindow):
         len_msg = int.from_bytes(len_msg, byteorder='big')
         type_msg = message[4:8]
         type_msg = int.from_bytes(type_msg, byteorder='big')
-        print(f"Message Received, size: {len_msg}, {len_}")
+        #print(f"Message Received, size: {len_msg}, {len_}")
 
         # MT_IMAGE는 tcp_protocol에서 직접 보내주므로 little로 변환된 데이터 수신
         if type_msg == MT_IMAGE:
             # print test
-            print("MT_IMAGE Received")
+            #print("MT_IMAGE Received")
 
             # Buffer to store the received message
             image_data = bytearray(len_msg)
@@ -849,7 +849,7 @@ if __name__ == "__main__":
 
     # Set the callback function for image update
     set_uimsg_update_callback(mainWin.callback_msg)
-    set_image_update_callback(mainWin.callback_image_msg)
+    #set_image_update_callback(mainWin.callback_image_msg)
 
     mainWin.show()
     sys.exit(app.exec_())
