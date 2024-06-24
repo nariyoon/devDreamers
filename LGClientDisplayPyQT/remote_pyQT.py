@@ -7,13 +7,13 @@ import re
 import numpy as np
 from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QCheckBox, QLabel, QLineEdit, QTextEdit, QVBoxLayout, QGridLayout, QWidget, QMessageBox
 from PyQt5.QtGui import QPixmap, QImage, QPainter, QPen, QColor
-from PyQt5.QtCore import pyqtSlot, Qt, QTimer, QMetaObject, Q_ARG
+from PyQt5.QtCore import pyqtSignal, pyqtSlot, Qt, QTimer, QMetaObject, Q_ARG
 from PyQt5.QtGui import QIntValidator
 from usermodel.usermodel import UserModel
 from tcp_protocol import sendMsgToCannon, set_uimsg_update_callback
 from common import common_start
 from queue import Queue
-#from message_utils import set_image_update_callback
+from image_process_ui import ImageProcessingThread
 
 # Define robotcontrolsw(RCV) state types
 ST_UNKNOWN      = 0x00
@@ -86,11 +86,21 @@ class Form1(QMainWindow):
     engage_order = "0123456789" # temporarily order
 
     # For counting sent to Robot message
-    CountSentMsg = 0
-    CountFinishedMsg = 0
+    CountSentCmdMsg = 0
+    CountSentCalibMsg = 0
+
+    # Image thread separates
+    image_received = pyqtSignal(bytes)
 
     def __init__(self):
         super().__init__()
+
+        # self.initUI()
+        self.image_processing_thread = ImageProcessingThread()
+        self.image_processing_thread.image_processed.connect(self.update_picturebox)
+        self.image_processing_thread.start()
+
+        self.image_received.connect(self.image_processing_thread.update_image_data)
 
         # Model : user_model is inserted from sub-directory config.ini file
         self.user_model = UserModel()
@@ -173,10 +183,18 @@ class Form1(QMainWindow):
         
         self.pictureBox = QLabel(self)
         self.pictureBox.setFixedSize(800, 640)  # Adjust size to 3/4 of the original
+        self.pictureBox.setAlignment(Qt.AlignCenter)
 
-        self.logBox = QTextEdit(self)
-        self.logBox.setReadOnly(True)
-        self.logBox.setFixedHeight(100)  # Adjust height to fit approximately 5 messages
+        # layout = QVBoxLayout()
+        # layout.addWidget(self.pictureBox)
+        
+        # container = QWidget()
+        # container.setLayout(layout)
+        # self.setCentralWidget(container)
+
+        # self.logBox = QTextEdit(self)
+        # self.logBox.setReadOnly(True)
+        # self.logBox.setFixedHeight(100)  # Adjust height to fit approximately 5 messages
 
         # Adding controls to layout
         layout.addWidget(self.labelIPAddress, 0, 0)
@@ -201,6 +219,11 @@ class Form1(QMainWindow):
         
         # PictureBox to fill the remaining space
         layout.addWidget(self.pictureBox, 3, 0, 1, 6, alignment=Qt.AlignCenter)
+        
+        self.logBox = QTextEdit(self)
+        self.logBox.setReadOnly(True)
+        self.logBox.setFixedHeight(100)  # Adjust height to fit approximately 5 messages
+        
         # LogBox at the bottom
         layout.addWidget(self.logBox, 4, 0, 1, 6)
 
@@ -251,7 +274,6 @@ class Form1(QMainWindow):
         else:
              self.buttonConnect.setEnabled(True)
 
-
     def validCheckPreArmedCode(self,code):
         if code:
             self.buttonPreArmEnable.setEnabled(True)
@@ -275,7 +297,12 @@ class Form1(QMainWindow):
             return True
         else:
             return False
-    
+        
+    @pyqtSlot(QPixmap)
+    def update_picturebox(self, pixmap):
+        self.pictureBox.setPixmap(pixmap)
+        self.pictureBox.setScaledContents(True)
+
     @pyqtSlot()
     def connect(self):
         ip = self.editIPAddress.text()
@@ -357,6 +384,7 @@ class Form1(QMainWindow):
 
     @pyqtSlot()
     def toggle_laser(self):
+        # Start Armed Manual 
         self.log_message(f"Laser Enabled: {self.checkBoxLaserEnable.isChecked()}")
         print("Laser Enabled: ", {self.checkBoxLaserEnable.isChecked()})
 
@@ -368,17 +396,20 @@ class Form1(QMainWindow):
         if (self.checkBoxLaserEnable.isChecked() == True):
             # self.RcvState_Curr |= ST_LASER_ON
             # self.send_state_change_request_to_server(self.RcvState_Curr)
-            state_int |= ST_LASER_ON
+            # state_int |= ST_LASER_ON
+            state_int = 72
             self.send_state_change_request_to_server(state_int)
         else:
             # self.RcvState_Curr &= ST_CLEAR_LASER_MASK
             # self.send_state_change_request_to_server(self.RcvState_Curr)
-            state_int &= ST_CLEAR_LASER_MASK
+            # state_int &= ST_CLEAR_LASER_MASK
+            state_int = 8
             self.send_state_change_request_to_server(state_int)
     
     @pyqtSlot()
     def toggle_armed_manual(self):
         self.log_message(f"Armed Manual Enabled: {self.checkBoxArmedManualEnable.isChecked()}")
+        print("Armed Manual Enabled: ", {self.checkBoxArmedManualEnable.isChecked()})
         if (self.checkBoxArmedManualEnable.isChecked() == True):
             self.send_state_change_request_to_server(ST_ARMED_MANUAL)
         else:
@@ -478,7 +509,7 @@ class Form1(QMainWindow):
         # 널 문자('\0') 추가
         char_array[len(text)] = 0
 
-        print("get_char_array_prearmed_from_text to cannon", char_array, " ", len(char_array))
+        # print("get_char_array_prearmed_from_text to cannon", char_array, " ", len(char_array))
         return char_array
     
     ########################################################################
@@ -505,6 +536,8 @@ class Form1(QMainWindow):
             msg_len = struct.calcsize(">II") + struct.calcsize(">I")
             msg = struct.pack(">II", struct.calcsize(">I"), MT_STATE_CHANGE_REQ) # make by big
             msg += struct.pack(">I", state)
+
+            print("send_state_change_request_to_server ", ' '.join(f'0x{byte:02x}' for byte in msg))
             sendMsgToCannon(msg)
             return True
         return False
@@ -521,8 +554,7 @@ class Form1(QMainWindow):
 
         # 널 문자('\0') 추가
         char_array[len(text)] = 0
-
-        print("get_char_array_autoengage_from_text to cannon", char_array, " ", len(char_array))
+        # print("get_char_array_autoengage_from_text to cannon", char_array, " ", len(char_array))
 
         return char_array
     
@@ -538,6 +570,7 @@ class Form1(QMainWindow):
             for byte in target_order:
                 msg.append(byte)
 
+            print("send_target_order_to_server ", ' '.join(f'0x{byte:02x}' for byte in msg))
             sendMsgToCannon(msg)
             return True
         return False
@@ -552,7 +585,8 @@ class Form1(QMainWindow):
     ########################################################################
     # Update Current System State
     def updateSystemState(self):
-        self.log_message("Called updateSystemState Function!!")
+        # self.log_message("Called updateSystemState Function!!_", self.RcvState_Curr)
+        self.log_message("Called updateSystemState Function!!_")
         if isinstance(self.RcvState_Curr, bytes):
             state_int = int.from_bytes(self.RcvState_Curr, byteorder='little')
         else:
@@ -602,6 +636,13 @@ class Form1(QMainWindow):
             self.log_message("Robot's connection is lost")
 
     ###################################################################
+    # Image presentation showing thread close
+    ###################################################################
+    def closeEvent(self, event):
+        self.image_processing_thread.stop()
+        event.accept()
+
+    ###################################################################
     # callback_msg 처리할때 MT 메시지 종류에 따라 차등 처리 기능 구현
     ###################################################################
     def callback_msg(self, message):
@@ -612,46 +653,48 @@ class Form1(QMainWindow):
         len_msg = int.from_bytes(len_msg, byteorder='big')
         type_msg = message[4:8]
         type_msg = int.from_bytes(type_msg, byteorder='big')
-        #print(f"Message Received, size: {len_msg}, {len_}")
+        # print(f"Message Received, size: {len_msg}, {len_}")
 
         # MT_IMAGE는 tcp_protocol에서 직접 보내주므로 little로 변환된 데이터 수신
         if type_msg == MT_IMAGE:
             # print test
-            #print("MT_IMAGE Received")
+            # print("MT_IMAGE Received")
 
             # Buffer to store the received message
             image_data = bytearray(len_msg)
-            image_data = message[8:len_msg+7]
+            image_data = message[8:8 + len_msg]
 
-            # Show the received image to picturebox
-            np_arr = np.frombuffer(image_data, np.uint8)
-            img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-            if img is not None:
-                img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                h, w, ch = img_rgb.shape
-                bytes_per_line = ch * w
-                qt_image = QImage(img_rgb.data, w, h, bytes_per_line, QImage.Format_RGB888)
-                pixmap = QPixmap.fromImage(qt_image)
+            self.image_received.emit(image_data)
 
-                # Add red cross hair in pixmap
-                painter = QPainter(pixmap)
-                pen = QPen(QColor(255, 0, 0), 2)
-                painter.setPen(pen)
+            # # Show the received image to picturebox
+            # np_arr = np.frombuffer(image_data, np.uint8)
+            # img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+            # if img is not None:
+            #     img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            #     h, w, ch = img_rgb.shape
+            #     bytes_per_line = ch * w
+            #     qt_image = QImage(img_rgb.data, w, h, bytes_per_line, QImage.Format_RGB888)
+            #     pixmap = QPixmap.fromImage(qt_image)
+
+            #     # Add red cross hair in pixmap
+            #     painter = QPainter(pixmap)
+            #     pen = QPen(QColor(255, 0, 0), 2)
+            #     painter.setPen(pen)
                 
-                # Calculate the center of the image
-                center_x = w // 2 # self.pictureBox.width() // 2
-                center_y = h // 2 # self.pictureBox.height() // 2
+            #     # Calculate the center of the image
+            #     center_x = w // 2 # self.pictureBox.width() // 2
+            #     center_y = h // 2 # self.pictureBox.height() // 2
 
-                self.crosshair_size = 60
-                half_size = self.crosshair_size // 2
+            #     self.crosshair_size = 60
+            #     half_size = self.crosshair_size // 2
 
-                painter.drawLine(center_x - half_size, center_y, center_x + half_size, center_y)
-                painter.drawLine(center_x, center_y - half_size, center_x, center_y + half_size)
+            #     painter.drawLine(center_x - half_size, center_y, center_x + half_size, center_y)
+            #     painter.drawLine(center_x, center_y - half_size, center_x, center_y + half_size)
 
-                painter.end()
+            #     painter.end()
 
-                self.pictureBox.setPixmap(pixmap)
-                self.pictureBox.setScaledContents(True)
+            #     self.pictureBox.setPixmap(pixmap)
+            #     self.pictureBox.setScaledContents(True)
 
         # 나머지 MT_MSG 들은 byte 배열이 들어오므로 bit -> little 변환이 필요함, 송신도 마찬가지
         elif type_msg == MT_STATE:
@@ -676,7 +719,7 @@ class Form1(QMainWindow):
         elif type_msg == MT_ERROR:
             # print test
             print("Socket Message Received", type_msg)
-            print("MT_STATE Received :", ' '.join(f'0x{byte:02x}' for byte in message))
+            print("MT_ERROR Received :", ' '.join(f'0x{byte:02x}' for byte in message))
 
             # ERR_SUCCESS = 0
             # ERR_FAIL_TO_CONNECT = 1
@@ -688,6 +731,10 @@ class Form1(QMainWindow):
             # print("MT_STATE Received as", self.RcvState_Curr, " ", rcv_state)
             print("Socket Message Received", socket_state)
             self.updateSocketState(socket_state)
+        else:
+            # print test
+            print("Exception Message Received", type_msg)
+            print("MT_EXCEPTION Received :", ' '.join(f'0x{byte:02x}' for byte in message))
 
     ###################################################################
     # callback_msg 처리할때 MT 메시지 종류에 따라 차등 처리 기능 구현
@@ -700,12 +747,12 @@ class Form1(QMainWindow):
         len_msg = int.from_bytes(len_msg, byteorder='big')
         type_msg = message[4:8]
         type_msg = int.from_bytes(type_msg, byteorder='big')
-        #print(f"Message Received, size: {len_msg}, {len_}")
+        print(f"Message Received, size: {len_msg}, {len_}")
 
         # MT_IMAGE는 tcp_protocol에서 직접 보내주므로 little로 변환된 데이터 수신
         if type_msg == MT_IMAGE:
             # print test
-            #print("MT_IMAGE Received")
+            print("MT_IMAGE Received")
 
             # Buffer to store the received message
             image_data = bytearray(len_msg)
@@ -849,7 +896,7 @@ if __name__ == "__main__":
 
     # Set the callback function for image update
     set_uimsg_update_callback(mainWin.callback_msg)
-    #set_image_update_callback(mainWin.callback_image_msg)
+    # set_image_update_callback(mainWin.callback_image_msg)
 
     mainWin.show()
     sys.exit(app.exec_())
