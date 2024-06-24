@@ -95,14 +95,14 @@ result_data = None
 def set_result_model(results):
     global result_data
     result_data = results.copy()
-    print(result_data)
+    # print(result_data)
  
 def get_result_model():
     global result_data
     return result_data
 
 def init_image_processing_model():
-    model = YOLO(f"{script_dir}/image_algo/models/best_960x544_50_2_final.pt")
+    model = YOLO(f"{script_dir}/image_algo/models/best.pt")
     return model
 
 def image_processing_thread(frame_queue, model):
