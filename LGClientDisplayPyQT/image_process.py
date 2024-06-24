@@ -3,17 +3,19 @@ import sys
 import threading
 import time
 import cv2
+import struct
 from queue import Queue, Full
 from image_algo.yolov8_algo import YOLO_Detector
 from image_algo.tflite_algo import ObjectDetector
+from message_utils import sendMsgToUI
 
 # Add the parent directory of `image_algo` to sys.path
 script_dir = os.path.dirname(os.path.realpath(__file__))
 parent_dir = os.path.abspath(os.path.join(script_dir, '..'))
 sys.path.append(parent_dir)
 
-CAP_PROP_FRAME_WIDTH = 1920
-CAP_PROP_FRAME_HEIGHT = 1080
+CAP_PROP_FRAME_WIDTH = 960
+CAP_PROP_FRAME_HEIGHT = 540
 INIT_TIME = 5
 QUEUE_MAX_SIZE = 10  # 큐의 최대 크기 설정
 
@@ -87,7 +89,11 @@ def display_initializing_frame(frame, algorithms, ready_events, elapsed_time):
     return draw_frame
 
 def process_images(algorithms, frame_queue):
+    print("process_images start")
     processed_queue = Queue()
+
+    debug_dir = os.path.join(os.getcwd(), 'debug')
+    os.makedirs(debug_dir, exist_ok=True)
 
     # 첫 번째 이미지를 대기
     first_image = frame_queue.get()
@@ -99,6 +105,7 @@ def process_images(algorithms, frame_queue):
     frame_cnt = 0
     init_start_time = time.time()
 
+    # last_save_time = time.time()
     while True:
         frame = frame_queue.get()
 
@@ -120,32 +127,132 @@ def process_images(algorithms, frame_queue):
             processed_frame = processed_queue.get() if not processed_queue.empty() else frame
             draw_frame = processed_frame.copy()
 
-        center_x, center_y = CAP_PROP_FRAME_WIDTH // 2, CAP_PROP_FRAME_HEIGHT // 2
-        cv2.imshow('Frame', draw_frame)
+        # 여기서 draw_frame을 UI로 보내기 위해 packed_data로 변환합니다.
+        draw_frame = cv2.resize(draw_frame, (1920, 1080))
+        buffer = cv2.imencode('.jpg', draw_frame)[1].tobytes()
+        msg_len = len(buffer)
+        msg_type = 3
+        format_string = f'>II{msg_len}s'
+        # print("img  header len_ ", msg_len, "header type_ ", msg_type)
+        packed_data = struct.pack(format_string, msg_len, msg_type, buffer)
+        sendMsgToUI(packed_data)
 
-        key = cv2.waitKey(1)
-        if key & 0xFF == ord('q'):
-            break
+        # 1초마다 debug 폴더에 이미지 저장
+
+        # save_path = os.path.join(debug_dir, f"frame_{int(frame_cnt)}.jpg")
+        # cv2.imwrite(save_path, frame)
+        # cv2.imshow('Frame', draw_frame)
+
+        # key = cv2.waitKey(1)
+        # if key & 0xFF == ord('q'):
+        #     break
 
         frame_cnt += 1
 
     frame_queue.put(None)
     processed_queue.put(None)
-    cv2.destroyAllWindows()
+    # cv2.destroyAllWindows()
 
     img_thread.join()
 
     return
 
-def start_image_processing(frame_queue):
-    algorithms = [
-        # TFLiteAlgorithm(f"{script_dir}/image_algo/models/detect.tflite"),
-        YOLOAlgorithm(f"{script_dir}/image_algo/models/best.pt"),
-    ]
-    
-    # TCP/IP 스레드가 이미 실행되고 있는 상태에서 frame_queue를 사용한다고 가정
-    process_images(algorithms, frame_queue)
 
-if __name__ == "__main__":
-    frame_queue = Queue(maxsize=10)
-    start_image_processing(frame_queue)
+
+from ultralytics import YOLO
+
+# def image_processing_handler(model, frame):
+#     if frame is None:
+#         return -1
+
+#     # 디텍션 수행
+#     results = model.predict(frame, imgsz=640)
+
+#     # 결과 이미지 그리기
+#     for result in results:
+#         boxes = result.boxes
+#         for box in boxes:
+#             if box.conf[0].cpu().item() >= 0.5:  # 확률이 0.5 이상인 경우에만 그리기
+#                 coords = box.xyxy[0].cpu().numpy()
+#                 x1, y1, x2, y2 = map(int, coords)
+#                 label = f"{int(box.cls[0].cpu().item())} {box.conf[0].cpu().item():.2f}"
+#                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+#                 cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+
+#     # draw_frame을 UI로 보내기 위해 packed_data로 변환합니다.
+#     buffer = cv2.imencode('.jpg', frame)[1].tobytes()
+#     msg_len = len(buffer)
+#     msg_type = 3
+#     format_string = f'>II{msg_len}s'
+#     packed_data = struct.pack(format_string, msg_len, msg_type, buffer)
+
+#     return packed_data
+
+# def init_image_processing_model():
+#     model = YOLO(f"{script_dir}/image_algo/models/best_14.pt")
+#     return model
+
+
+
+
+
+
+def image_processing_handler(model, frame):
+    if frame is None:
+        return -1
+
+    # 디텍션 수행
+    results = model.predict(frame, imgsz=640)
+
+    # # 결과 이미지 그리기
+    # for result in results:
+    #     boxes = result.boxes
+    #     for box in boxes:
+    #         if box.conf[0].cpu().item() >= 0.5:  # 확률이 0.5 이상인 경우에만 그리기
+    #             coords = box.xyxy[0].cpu().numpy()
+    #             x1, y1, x2, y2 = map(int, coords)
+    #             label = f"{int(box.cls[0].cpu().item())} {box.conf[0].cpu().item():.2f}"
+    #             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+    #             cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+
+    # # draw_frame을 UI로 보내기 위해 packed_data로 변환합니다.
+    # buffer = cv2.imencode('.jpg', frame)[1].tobytes()
+    # msg_len = len(buffer)
+    # msg_type = 3
+    # format_string = f'>II{msg_len}s'
+    # packed_data = struct.pack(format_string, msg_len, msg_type, buffer)
+
+    return results
+
+
+result_data = None
+
+def set_result_model(results):
+    global result_data
+    result_data = results.copy()
+
+def get_result_model():
+    global result_data  # 글로벌 변수임을 선언
+    return result_data
+
+def init_image_processing_model():
+    model = YOLO(f"{script_dir}/image_algo/models/best_960x540_real_background.pt")
+    return model
+
+
+def image_processing_thread(frame_queue, processed_queue, model):
+    while True:
+        frame = frame_queue.get()
+        if frame is None:
+            break
+        processed_data = image_processing_handler(model, frame)
+        processed_queue.put(processed_data)
+
+def send_image_to_ui_thread(processed_queue):
+    from message_utils import sendMsgToUI
+    while True:
+        processed_data = processed_queue.get()
+        if processed_data is None:
+            break
+        # sendMsgToUI(processed_data)
+        set_result_model(processed_data)

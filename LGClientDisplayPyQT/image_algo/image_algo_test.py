@@ -202,7 +202,7 @@ if __name__ == "__main__":
     algorithms = [
         # OpenCVDefaultAlgorithm(symbols),
         # TFLiteAlgorithm(f"{script_dir}/../TfLite-2.17/Data/detect.tflite"),
-        YOLOAlgorithm(f"{script_dir}/models/best.pt"),
+        YOLOAlgorithm(f"{script_dir}/models/best_960x540_real_background.pt"),
     ]
 
     process_images(algorithms)

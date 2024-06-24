@@ -8,8 +8,8 @@ class YOLO_Detector:
         self.model = YOLO(model_path)
         self.model_name = "YOLOv8"
 
-    def detect(self, image, draw_image, score_threshold=0.45):
-        results = self.model.predict(image, imgsz=640)
+    def detect(self, image, draw_image, score_threshold=0.5):
+        results = self.model.predict(image, imgsz=[960, 540])
         boxes, classes, scores = [], [], []
 
         for result in results:
