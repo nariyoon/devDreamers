@@ -113,16 +113,13 @@ def tcp_ip_thread(ip, port, img_model):
                 continue
 
             packedData = struct.pack(f'>II{len(buffer)}s', len_, type_, buffer)
-
             if type_ == MT_IMAGE:
-
                 sendMsgToUI(packedData)
 
                 image_buffer = buffer.copy()
                 if frame_queue.full():
-                        frame_queue.get()  # 가장 오래된 항목을 드랍
+                    frame_queue.get()  # 가장 오래된 항목을 드랍
                 frame_queue.put(image_buffer)                
-
 
             else:
                 print("len_ ", len_, "header type_ ", type_, "data_", int.from_bytes(buffer, byteorder='big'))
@@ -145,8 +142,6 @@ def sendMsgToCannon(msg):
     value = msg[8:]
 
     typeInt = int.from_bytes(type, byteorder='big')
-    valueInt = int.from_bytes(value, byteorder='big')
-
     print("msg: ", msg, "len: ", len(msg), "type: ", typeInt, "value: ", value)
     if typeInt == MT_TARGET_SEQUENCE:
         print("type is MT_TARGET_SEQUENCE: ", value)
@@ -154,8 +149,7 @@ def sendMsgToCannon(msg):
         print("build msg.: ", buildData)
         clientSock.sendall(buildData)
     elif typeInt == MT_STATE_CHANGE_REQ:
-        print("type is MT_STATE_CHANGE_REQ / value: ", valueInt)
-        cannonStatus = valueInt
+        print("type is MT_STATE_CHANGE_REQ")
         clientSock.sendall(msg)
     elif typeInt == MT_PREARM:
         print("type is MT_PREARM")
@@ -172,15 +166,13 @@ def sendMsgToUI(msg):
 
 def buildTagetOrientation(msg):
     print("target sequence: ", msg)
+
     # get target orientation
-
-    target = [500, 500]
     data = bytearray()
-
     cnt = 0
-    buffer = [0, ]
+    buffer = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
     for i in msg:
-        print("i: ", i)
+        #print("i: ", i)
         if i != 0:
             buffer[cnt] = i - 48
             cnt = cnt + 1
@@ -192,10 +184,25 @@ def buildTagetOrientation(msg):
     # add target amount
     data.extend(struct.pack('>I', cnt))
     
-    # add target value
-    for value in target:
-        convertValue = send_float(value)
-        data.extend(struct.pack('>I', convertValue))
+    targetData = get_result_model()
+    if 'target_info' in targetData:
+        print("Target Info")
+        for i in range(cnt):
+            print("target num: ", buffer[i])
+            for target in targetData['target_info']:
+                label = target.get('label', 'N/A')
+                #print(f"Label: {label}", "label int: ", int(label))
+                if buffer[i] == int(label):
+                    center = target.get('center', [0, 0])
+                    for value in center:
+                        convertValue = send_float(value)
+                        data.extend(struct.pack('>I', convertValue))
+                        
+                    print(f"Label: {label}, Center: {center}")
+                    # exit for taget if label is found
+                    break
+    else:
+        print("no target_info")
 
     return data
 
