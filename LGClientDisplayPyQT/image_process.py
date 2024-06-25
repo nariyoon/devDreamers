@@ -54,41 +54,22 @@ class YOLOAlgorithm:
             return draw_frame, []  # YOLO is not ready yet, return empty result
         return self.detector.detect(frame, draw_frame)
 
-def image_processing_task(frame_queue, processed_queue, algorithms, ready_events):
-    # 모든 알고리즘이 준비될 때까지 대기
-    for event in ready_events:
-        event.wait()
-        
-    while True:
-        frame = frame_queue.get()
-        if frame is None:
-            break
+def apply_custom_sharpening_filter(image):
+    kernel = np.array([[0, -0.5, 0],
+                       [-0.5, 3, -0.5],
+                       [0, -0.5, 0]])
+    sharpened_image = cv2.filter2D(image, -1, kernel)
+    return sharpened_image
 
-        draw_frame = frame.copy()
-        for algorithm in algorithms:
-            algorithm.detect(frame, draw_frame)
-            cv2.putText(draw_frame, f"{algorithm.model_name}", (draw_frame.shape[1] - 200, 30), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 1, cv2.LINE_AA)
-        processed_queue.put(draw_frame)
+def apply_laplacian_sharpening(image):
+    laplacian = cv2.Laplacian(image, cv2.CV_64F)
+    sharpened = cv2.convertScaleAbs(image - laplacian)
+    return sharpened
 
-def initialize_algorithms(algorithms, first_image):
-    ready_events = [threading.Event() for _ in algorithms]
-    for algorithm, ready_event in zip(algorithms, ready_events):
-        threading.Thread(target=algorithm.initialize, args=(first_image, ready_event)).start()
-    return ready_events
-
-def display_initializing_frame(frame, algorithms, ready_events, elapsed_time):
-    # 현재 프레임에 그레이스케일 및 블러 적용
-    draw_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    draw_frame = cv2.GaussianBlur(draw_frame, (21, 21), 0)
-    draw_frame = cv2.cvtColor(draw_frame, cv2.COLOR_GRAY2BGR)
-    for algorithm, ready_event in zip(algorithms, ready_events):
-        if not ready_event.is_set():
-            cv2.putText(draw_frame, f"{algorithm.model_name} initializing ...", 
-                        (50, CAP_PROP_FRAME_HEIGHT // 2), cv2.FONT_HERSHEY_SIMPLEX, 1, 
-                        (255, 255, 255), 2, cv2.LINE_AA)
-    return draw_frame
-
+def apply_unsharp_mask(image, kernel_size=(3, 3), sigma=1.0, amount=0.3):
+    blurred = cv2.GaussianBlur(image, kernel_size, sigma)    
+    sharpened = cv2.addWeighted(image, 1 + amount, blurred, -amount, 0)    
+    return sharpened
 
 result_data = None
 
@@ -105,64 +86,67 @@ def init_image_processing_model():
     model = YOLO(f"{script_dir}/image_algo/models/best.pt")
     return model
 
-def image_processing_thread(frame_queue, model):
+def image_processing_thread(QUEUE, model):
     DATA = {}
     while True:
-        frame = frame_queue.get()
-        if frame is None:
-            break
+        if not QUEUE.empty():
+            frame = QUEUE.get()
+            if frame is None:
+                break
 
-        imageMat = cv2.imdecode(np.frombuffer(frame, dtype=np.uint8), cv2.IMREAD_COLOR)
-        results = model.predict(imageMat, imgsz=[960, 544], verbose=False)
+            imageMat = cv2.imdecode(np.frombuffer(frame, dtype=np.uint8), cv2.IMREAD_COLOR)
+            results = model.predict(imageMat, imgsz=[960, 544], verbose=False)
 
-        target_info = []
-        box_info = []
-        for result in results:
-            boxes = result.boxes
+            target_info = []
+            box_info = []
+            for result in results:
+                boxes = result.boxes
 
-            score = boxes.conf[0].cpu().item()
-            if score < 0.5:
-                continue
-
-            for box in boxes:
-                coords = box.xyxy[0].cpu().numpy()
-                score = box.conf[0].cpu().item()
+                if len(boxes) == 0:
+                    continue
+                score = boxes.conf[0].cpu().item()
                 if score < 0.5:
                     continue
-                x1, y1, x2, y2 = map(int, coords)
 
-                # 라벨 번호와 박스 중심점 계산
-                label = f"{int(box.cls[0].cpu().item())}"
-                center_x = (x1 + x2) / 2
-                center_y = (y1 + y2) / 2
+                for box in boxes:
+                    coords = box.xyxy[0].cpu().numpy()
+                    score = box.conf[0].cpu().item()
+                    if score < 0.5:
+                        continue
+                    x1, y1, x2, y2 = map(int, coords)
 
-                # 정보를 리스트에 추가
-                target_info.append({
-                    "label": label,
-                    "center": [round(center_x, 1), round(center_y, 1)]
-                })
+                    # 라벨 번호와 박스 중심점 계산
+                    label = f"{int(box.cls[0].cpu().item())}"
+                    center_x = (x1 + x2) / 2
+                    center_y = (y1 + y2) / 2
 
-                box_info.append({
-                    "label": label,
-                    "bbox": [x1, y1, x2, y2]
-                })
+                    # 정보를 리스트에 추가
+                    target_info.append({
+                        "label": label,
+                        "center": [round(center_x, 1), round(center_y, 1)]
+                    })
 
-                # 박스와 라벨 그리기
-                cv2.rectangle(imageMat, (x1, y1), (x2, y2), (0, 255, 0), 1)
-                cv2.putText(imageMat, label, (x1, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 2)
+                    box_info.append({
+                        "label": label,
+                        "bbox": [x1, y1, x2, y2]
+                    })
 
-                # 중심점 빨간색 점 그리기
-                cv2.circle(imageMat, (int(center_x), int(center_y)), 3, (0, 0, 255), -1)
+                    # 박스와 라벨 그리기
+                    cv2.rectangle(imageMat, (x1, y1), (x2, y2), (0, 255, 0), 1)
+                    cv2.putText(imageMat, label, (x1, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 2)
+
+                    # 중심점 빨간색 점 그리기
+                    cv2.circle(imageMat, (int(center_x), int(center_y)), 3, (0, 0, 255), -1)
 
 
-        # DATA 딕셔너리에 업데이트
-        DATA['target_info'] = target_info
-        DATA['box_info'] = box_info
-        set_result_model(DATA)
-        cv2.imshow('Detection and Classification Result', imageMat)
+            # DATA 딕셔너리에 업데이트
+            DATA['target_info'] = target_info
+            DATA['box_info'] = box_info
+            set_result_model(DATA)
+            cv2.imshow('Detection and Classification Result', imageMat)
 
-        key = cv2.waitKey(1)
-        if key == ord('q'):
-            cv2.destroyAllWindows()
-            break
+            key = cv2.waitKey(1)
+            if key == ord('q'):
+                cv2.destroyAllWindows()
+                break
 

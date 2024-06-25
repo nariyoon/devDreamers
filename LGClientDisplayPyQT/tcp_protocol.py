@@ -8,6 +8,7 @@ from image_process import get_result_model
 from queue import Queue, Full
 #from message_utils import sendMsgToUI
 import os
+from queue import LifoQueue
 
 # Define message types
 MT_COMMANDS = 1
@@ -56,9 +57,10 @@ def set_uimsg_update_callback(callback):
     uimsg_update_callback = callback
 
 # frame_queue와 processed_queue를 tcp_protocol.py로 옮김
-frame_queue = Queue(maxsize=20)
+frame_queue = Queue(maxsize=10)
+frame_stack = LifoQueue(maxsize=10)
 
-def tcp_ip_thread(ip, port, img_model):
+def tcp_ip_thread(ip, port):
     """
     This thread handles TCP/IP communication with the Raspberry Pi.
     """
@@ -113,13 +115,19 @@ def tcp_ip_thread(ip, port, img_model):
                 continue
 
             packedData = struct.pack(f'>II{len(buffer)}s', len_, type_, buffer)
+
             if type_ == MT_IMAGE:
+
                 sendMsgToUI(packedData)
 
                 image_buffer = buffer.copy()
-                if frame_queue.full():
-                    frame_queue.get()  # 가장 오래된 항목을 드랍
-                frame_queue.put(image_buffer)                
+                # if frame_queue.full():
+                #         frame_queue.get()
+                # frame_queue.put(image_buffer)                
+
+                if frame_stack.full():
+                    frame_stack.get()
+                frame_stack.put(image_buffer)
 
             else:
                 print("len_ ", len_, "header type_ ", type_, "data_", int.from_bytes(buffer, byteorder='big'))
