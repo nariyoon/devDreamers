@@ -6,14 +6,19 @@ import cv2
 import re
 import numpy as np
 from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QCheckBox, QLabel, QLineEdit, QTextEdit, QVBoxLayout, QGridLayout, QWidget, QMessageBox
-from PyQt5.QtGui import QPixmap, QImage, QPainter, QPen, QColor
-from PyQt5.QtCore import pyqtSignal, pyqtSlot, Qt, QTimer, QMetaObject, Q_ARG
+from PyQt5.QtGui import QPixmap #QTextCursor
+from PyQt5.QtCore import pyqtSignal, pyqtSlot, Qt, QTimer, QMetaObject, Q_ARG # , qRegisterMetaType
+# from PyQt5.QtGui import QTextCursor
 from PyQt5.QtGui import QIntValidator
 from usermodel.usermodel import UserModel
 from tcp_protocol import sendMsgToCannon, set_uimsg_update_callback
 from common import common_start
 from queue import Queue
 from image_process_ui import ImageProcessingThread
+# from sip import qRegisterMetaType  # Import qRegisterMetaType from sip module
+
+# # Register QTextCursor with QMetaType
+# qRegisterMetaType(QTextCursor)
 
 # Define robotcontrolsw(RCV) state types
 ST_UNKNOWN      = 0x00
@@ -41,7 +46,7 @@ MT_STATE = 6
 MT_STATE_CHANGE_REQ = 7
 MT_CALIB_COMMANDS = 8
 MT_TARGET_DIFF = 9
-MT_ERROR = 10
+MT_SOCKET = 10
 
 # Define command types
 CT_PAN_LEFT_START = 0x01
@@ -61,14 +66,14 @@ LT_INC_X = 0x02
 LT_DEC_Y = 0x04
 LT_INC_Y = 0x08
 
-# error code
-ERR_SUCCESS = 0
-ERR_FAIL_TO_CONNECT = 1
-ERR_CONNECTION_LOST = 2
+# Define Socket related code 
+SOCKET_SUCCESS = 0
+SOCKET_FAIL_TO_CONNECT = 1
+SOCKET_CONNECTION_LOST = 2
 
 class Form1(QMainWindow):
     # Model : SocketState
-    SocketState = ERR_CONNECTION_LOST
+    SocketState = SOCKET_CONNECTION_LOST
     
     # Model : RcsState
     RcvState_Curr = ST_UNKNOWN
@@ -89,8 +94,14 @@ class Form1(QMainWindow):
     CountSentCmdMsg = 0
     CountSentCalibMsg = 0
 
-    # Image thread separates
+    # Define Image thread to separate
     image_received = pyqtSignal(bytes)
+    
+    # Add a signal to emit RcvState_Curr changes
+    rcv_state_changed = pyqtSignal(int)
+
+    # Define a signal to emit log messages
+    log_signal = pyqtSignal(str)
 
     def __init__(self):
         super().__init__()
@@ -100,7 +111,12 @@ class Form1(QMainWindow):
         self.image_processing_thread.image_processed.connect(self.update_picturebox)
         self.image_processing_thread.start()
 
+        # Connect the signal to the slot in the thread
+        self.rcv_state_changed.connect(self.image_processing_thread.update_rcv_state)
         self.image_received.connect(self.image_processing_thread.update_image_data)
+        
+        # Connect the log signal to the log message slot
+        self.log_signal.connect(self.append_log_message)
 
         # Model : user_model is inserted from sub-directory config.ini file
         self.user_model = UserModel()
@@ -114,10 +130,21 @@ class Form1(QMainWindow):
         self.recv_callback = None
         self.send_command_callback = None
 
-        # 타이머 설정
+        # Socket related 타이머 설정
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.HeartBeatTimer_event)
         # self.timer.start(1000)  # 1000 밀리초 = 1초
+
+        # Key Message Event 관련 타이머 설정
+        self.key_event_timer_command = QTimer(self)
+        self.key_event_timer_command.setInterval(100)  # 100밀리초 간격
+        self.key_event_timer_command.timeout.connect(self.process_command_key_event)
+        self.key_event_timer_command.setSingleShot(True)
+        self.key_event_timer_calibration = QTimer(self)
+        self.key_event_timer_calibration.setInterval(100)  # 100밀리초 간격
+        self.key_event_timer_calibration.timeout.connect(self.process_calibration_key_event)
+        self.key_event_timer_calibration.setSingleShot(True)
+        self.last_key_event = None
 
         # # tcp_thread용 frame queue 정의
         # self.frame_queue = Queue(maxsize=20)  # Frame queue
@@ -375,12 +402,16 @@ class Form1(QMainWindow):
         self.RcvState_Curr = ST_PREARMED
         self.RcvState_Requested = ST_PREARMED
         self.updateSystemState()
-
         self.setAllUIEnabled(True, True)
 
-        # else:
-        #     self.log_message("Send Pre-Arm Disable")
-        #     self.send_state_change_request_to_server(ST_SAFE)
+    @pyqtSlot()
+    def toggle_armed_manual(self):
+        self.log_message(f"Armed Manual Enabled: {self.checkBoxArmedManualEnable.isChecked()}")
+        print("Armed Manual Enabled: ", {self.checkBoxArmedManualEnable.isChecked()})
+        if (self.checkBoxArmedManualEnable.isChecked() == True):
+            self.send_state_change_request_to_server(ST_ARMED_MANUAL)
+        else:
+            self.send_state_change_request_to_server(ST_PREARMED)   
 
     @pyqtSlot()
     def toggle_laser(self):
@@ -394,43 +425,18 @@ class Form1(QMainWindow):
             state_int = self.RcvState_Curr
 
         if (self.checkBoxLaserEnable.isChecked() == True):
-            # self.RcvState_Curr |= ST_LASER_ON
-            # self.send_state_change_request_to_server(self.RcvState_Curr)
-            # state_int |= ST_LASER_ON
-            state_int = 72
+            # state_int should be 72
+            if (state_int & ST_ARMED_MANUAL) == ST_ARMED_MANUAL:
+                state_int |= ST_LASER_ON
+            else:
+                self.checkBoxArmedManualEnable.setChecked = True
+                state_int |= (ST_ARMED_MANUAL|ST_LASER_ON)
             self.send_state_change_request_to_server(state_int)
         else:
-            # self.RcvState_Curr &= ST_CLEAR_LASER_MASK
-            # self.send_state_change_request_to_server(self.RcvState_Curr)
-            # state_int &= ST_CLEAR_LASER_MASK
-            state_int = 8
+            # state_int should be 8
+            state_int &= ST_CLEAR_LASER_MASK
             self.send_state_change_request_to_server(state_int)
     
-    @pyqtSlot()
-    def toggle_armed_manual(self):
-        self.log_message(f"Armed Manual Enabled: {self.checkBoxArmedManualEnable.isChecked()}")
-        print("Armed Manual Enabled: ", {self.checkBoxArmedManualEnable.isChecked()})
-        if (self.checkBoxArmedManualEnable.isChecked() == True):
-            self.send_state_change_request_to_server(ST_ARMED_MANUAL)
-        else:
-            self.send_state_change_request_to_server(ST_PREARMED)   
-            
-    @pyqtSlot()
-    def toggle_auto_engage(self):
-        self.log_message(f"Auto Engage Enabled: {self.checkBoxArmedManualEnable.isChecked()}")
-        if (self.checkBoxAutoEngage.isChecked() == True):
-            engageOrder = self.editEngageOrder.text
-
-            if not engageOrder:
-                self.log_message(f"Please enter engageOrders")
-            else:
-                char_array = self.get_char_array_autoengage_from_text(self.editEngageOrder)
-                self.send_target_order_to_server(char_array)
-
-            self.send_state_change_request_to_server(ST_ENGAGE_AUTO)
-        else:
-            self.send_state_change_request_to_server(ST_PREARMED)  
-
     @pyqtSlot()
     def toggle_calib(self):
         self.log_message(f"Calibration Enabled: {self.checkBoxCalibrate.isChecked()}")
@@ -442,18 +448,33 @@ class Form1(QMainWindow):
             state_int = self.RcvState_Curr
 
         if(self.checkBoxCalibrate.isChecked() == True):
-            # RcvState_Curr |= ST_CALIB_ON
-            # self.sensend_state_change_request_to_server(RcvState_Curr)
-            # self.updateSystemState()
-            state_int |= ST_CALIB_ON
+            if (state_int & ST_ARMED_MANUAL) == ST_ARMED_MANUAL:
+                state_int |= ST_CALIB_ON
+            else:
+                self.checkBoxArmedManualEnable.setChecked = True
+                state_int |= (ST_ARMED_MANUAL|ST_CALIB_ON)
             self.send_state_change_request_to_server(state_int)
         else:
-            # RcvState_Curr &= ST_CLEAR_CALIB_MASK
-            # self.sensend_state_change_request_to_server(RcvState_Curr)
-            # self.updateSystemState()
+            # state_int should be 8
             state_int &= ST_CLEAR_CALIB_MASK
             self.send_state_change_request_to_server(state_int)
-        
+                    
+    @pyqtSlot()
+    def toggle_auto_engage(self):
+        self.log_message(f"Auto Engage Enabled: {self.checkBoxAutoEngage.isChecked()}")
+        print("Auto Engage Enabled: ", {self.checkBoxAutoEngage.isChecked()})
+        if (self.checkBoxAutoEngage.isChecked() == True):
+            engageOrder = self.editEngageOrder.text
+
+            if not engageOrder:
+                self.log_message(f"Please enter engageOrders")
+            else:
+                char_array = self.get_char_array_autoengage_from_text(self.editEngageOrder)
+                self.send_target_order_to_server(char_array)
+                self.send_state_change_request_to_server(ST_ENGAGE_AUTO)
+        else:
+            self.send_state_change_request_to_server(ST_PREARMED)  
+
     ########################################################################
     # MT_COMMANDS 전송
     def set_command(self, command):
@@ -479,7 +500,7 @@ class Form1(QMainWindow):
     # Client Socket 연결상태 전송 (업데이트)
     def is_client_connected(self):
         # 클라이언트 연결 상태를 확인하는 함수
-        if self.SocketState == ERR_SUCCESS:
+        if self.SocketState == SOCKET_SUCCESS:
             return True  # 예시로 True 반환, 실제로는 연결 상태를 확인하는 코드 필요
         else:
             return False  # 예시로 True 반환, 실제로는 연결 상태를 확인하는 코드 필요
@@ -576,11 +597,20 @@ class Form1(QMainWindow):
         return False
 
     ########################################################################
-    # log message textbox 출력
-    def log_message(self, message):
+    # log message textbox 출력 - Invoke 처리 완료
+    @pyqtSlot(str)
+    def append_log_message(self, message):
         self.logBox.append(message)
         self.logBox.ensureCursorVisible()
         QApplication.processEvents()  # Process events to update UI
+
+    def log_message(self, message):
+        self.log_signal.emit(message)
+
+    # def log_message(self, message):
+    #     self.logBox.append(message)
+    #     self.logBox.ensureCursorVisible()
+    #     QApplication.processEvents()  # Process events to update UI
 
     ########################################################################
     # Update Current System State
@@ -615,21 +645,24 @@ class Form1(QMainWindow):
             self.editState.setText("MT_STATE : GGGG") 
             self.log_message(f"MT_STATE : EXCEPTION_{state_int}")
             # self.send_state_change_request_to_server()
+        
+        # Emit the signal with the new state
+        self.rcv_state_changed.emit(state_int)
 
     def updateSocketState(self, socketstate):
-        if socketstate == ERR_SUCCESS:
-            self.SocketState = ERR_SUCCESS
+        if socketstate == SOCKET_SUCCESS:
+            self.SocketState = SOCKET_SUCCESS
             self.log_message("Robot is connected successfully")
 
-        elif socketstate == ERR_FAIL_TO_CONNECT:
-            self.SocketState = ERR_FAIL_TO_CONNECT
+        elif socketstate == SOCKET_FAIL_TO_CONNECT:
+            self.SocketState = SOCKET_FAIL_TO_CONNECT
             self.setAllUIEnabled(False, False)
             # self.buttonConnect.setEnabled(True)
             # self.buttonDisconnect.setEnabled(False)
             self.log_message("Robot is failed to connect")
 
-        elif socketstate == ERR_CONNECTION_LOST:
-            self.SocketState = ERR_CONNECTION_LOST
+        elif socketstate == SOCKET_CONNECTION_LOST:
+            self.SocketState = SOCKET_CONNECTION_LOST
             self.setAllUIEnabled(False, False)
             # self.buttonConnect.setEnabled(True)
             # self.buttonDisconnect.setEnabled(False)
@@ -700,30 +733,22 @@ class Form1(QMainWindow):
         elif type_msg == MT_STATE:
             # print test
             print("MT_STATE Received :", ' '.join(f'0x{byte:02x}' for byte in message))
-
-            # Buffer to store the received message
-            # rcv_state = bytearray(len)
-            # rcv_state = message[8:len+7]
-            # rcv_state = int.from_bytes(rcv_state, byteorder='big')
             rcv_state = struct.unpack(">III", message)[2]
             self.RcvState_Curr = rcv_state
-            print("MT_STATE Received as", self.RcvState_Curr, " ", rcv_state)
+            # print("MT_STATE Received as", self.RcvState_Curr, " ", rcv_state)
             self.updateSystemState()
 
             if self.RcvState_Curr != self.RcvState_Prev:
                 self.RcvState_Prev = self.RcvState_Curr
-            # if self.RcvState_Curr != self.RcvState_Requested:
-            #     self.send_state_change_request_to_server(self.RcvState_Requested)
-            #     print("MT_STATE request to change as", self.RcvState_Requested)
-                
-        elif type_msg == MT_ERROR:
+            
+        elif type_msg == MT_SOCKET:
             # print test
             print("Socket Message Received", type_msg)
-            print("MT_ERROR Received :", ' '.join(f'0x{byte:02x}' for byte in message))
+            print("MT_SOCKET Received :", ' '.join(f'0x{byte:02x}' for byte in message))
 
-            # ERR_SUCCESS = 0
-            # ERR_FAIL_TO_CONNECT = 1
-            # ERR_CONNECTION_LOST = 2
+            # SOCKET_SUCCESS = 0
+            # SOCKET_FAIL_TO_CONNECT = 1
+            # SOCKET_CONNECTION_LOST = 2
 
             socket_state = struct.unpack(">IIB", message)[2]
             socket_state = int(socket_state)
@@ -736,128 +761,12 @@ class Form1(QMainWindow):
             print("Exception Message Received", type_msg)
             print("MT_EXCEPTION Received :", ' '.join(f'0x{byte:02x}' for byte in message))
 
-    ###################################################################
-    # callback_msg 처리할때 MT 메시지 종류에 따라 차등 처리 기능 구현
-    ###################################################################
-    def callback_image_msg(self, message):
-        # For double check
-        len_ = len(message) - 8
-        # Unpack the message header
-        len_msg = message[0:4]
-        len_msg = int.from_bytes(len_msg, byteorder='big')
-        type_msg = message[4:8]
-        type_msg = int.from_bytes(type_msg, byteorder='big')
-        print(f"Message Received, size: {len_msg}, {len_}")
-
-        # MT_IMAGE는 tcp_protocol에서 직접 보내주므로 little로 변환된 데이터 수신
-        if type_msg == MT_IMAGE:
-            # print test
-            print("MT_IMAGE Received")
-
-            # Buffer to store the received message
-            image_data = bytearray(len_msg)
-            image_data = message[8:len_msg+7]
-
-            # Show the received image to picturebox
-            np_arr = np.frombuffer(image_data, np.uint8)
-            img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-            if img is not None:
-                img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                h, w, ch = img_rgb.shape
-                bytes_per_line = ch * w
-                qt_image = QImage(img_rgb.data, w, h, bytes_per_line, QImage.Format_RGB888)
-                pixmap = QPixmap.fromImage(qt_image)
-
-                # Add red cross hair in pixmap
-                painter = QPainter(pixmap)
-                pen = QPen(QColor(255, 0, 0), 2)
-                painter.setPen(pen)
-                
-                # Calculate the center of the image
-                center_x = w // 2 # self.pictureBox.width() // 2
-                center_y = h // 2 # self.pictureBox.height() // 2
-
-                self.crosshair_size = 60
-                half_size = self.crosshair_size // 2
-
-                painter.drawLine(center_x - half_size, center_y, center_x + half_size, center_y)
-                painter.drawLine(center_x, center_y - half_size, center_x, center_y + half_size)
-
-                painter.end()
-
-                self.pictureBox.setPixmap(pixmap)
-                self.pictureBox.setScaledContents(True)
-
-        # 나머지 MT_MSG 들은 byte 배열이 들어오므로 bit -> little 변환이 필요함, 송신도 마찬가지
-        elif type_msg == MT_STATE:
-            # print test
-            print("MT_STATE Received :", ' '.join(f'0x{byte:02x}' for byte in message))
-
-            # Buffer to store the received message
-            # rcv_state = bytearray(len)
-            # rcv_state = message[8:len+7]
-            # rcv_state = int.from_bytes(rcv_state, byteorder='big')
-            rcv_state = struct.unpack(">III", message)[2]
-            self.RcvState_Curr = rcv_state
-            print("MT_STATE Received as", self.RcvState_Curr, " ", rcv_state)
-            self.updateSystemState()
-
-            if self.RcvState_Curr != self.RcvState_Prev:
-                self.RcvState_Prev = self.RcvState_Curr
-            # if self.RcvState_Curr != self.RcvState_Requested:
-            #     self.send_state_change_request_to_server(self.RcvState_Requested)
-            #     print("MT_STATE request to change as", self.RcvState_Requested)
-                
-        elif type_msg == MT_ERROR:
-            # print test
-            print("Socket Message Received", type_msg)
-            print("MT_STATE Received :", ' '.join(f'0x{byte:02x}' for byte in message))
-
-            # ERR_SUCCESS = 0
-            # ERR_FAIL_TO_CONNECT = 1
-            # ERR_CONNECTION_LOST = 2
-
-            socket_state = struct.unpack(">IIB", message)[2]
-            socket_state = int(socket_state)
-            # self.SocketState = socket_state
-            # print("MT_STATE Received as", self.RcvState_Curr, " ", rcv_state)
-            print("Socket Message Received", socket_state)
-            self.updateSocketState(socket_state)
-
     # Using heartbeat timer, in order to detect the robot control sw to set abnormal state
     def HeartBeatTimer_event(self):
         self.log_message("Timer event: sending message to cannon")
 
     def keyPressEvent(self, event):
-        # key_map = {
-        #     Qt.Key_P: ST_PREARMED,
-        #     Qt.Key_S: ST_SAFE,
-        #     Qt.Key_C: ST_CALIB_ON
-        # }
-        # if event.key() in key_map:
-        #     self.RcvState_Curr = int(key_map[event.key()])
-        #     self.updateSystemState()
-        if self.RcvState_Curr == ST_PREARMED or self.RcvState_Curr == ST_ARMED_MANUAL :
-            key_map = {
-                Qt.Key_I: CT_PAN_UP_START,
-                # Qt.Key_Up: CT_PAN_UP_START,
-                Qt.Key_L: CT_PAN_RIGHT_START,
-                # Qt.Key_Right: CT_PAN_RIGHT_START,
-                Qt.Key_J: CT_PAN_LEFT_START,
-                # Qt.Key_Left: CT_PAN_LEFT_START,
-                Qt.Key_M: CT_PAN_DOWN_START,
-                # Qt.Key_Down: CT_PAN_DOWN_START,
-                Qt.Key_F: CT_FIRE_START,
-                # Qt.Key_Return: CT_FIRE_START,
-                # Qt.Key_S: CT_SAFE_TEST
-            }
-            # if self.RcvState_Curr == ST_ARMED_MANUAL: 
-            if event.key() in key_map:
-                self.set_command(key_map[event.key()])
-                self.CountSentCmdMsg += 1
-                print("Count Sent Command Key Event : ", self.CountSentCmdMsg)
-
-        elif (self.RcvState_Curr & ST_CALIB_ON) == ST_CALIB_ON :
+        if (self.RcvState_Curr & ST_CALIB_ON) == ST_CALIB_ON :
             key_map = {
                 Qt.Key_I: LT_INC_Y,
                 Qt.Key_L: LT_INC_X,
@@ -866,9 +775,52 @@ class Form1(QMainWindow):
             }
             # if self.RcvState_Curr == ST_CALIB_ON: 
             if event.key() in key_map:
-                self.send_calib_to_server(key_map[event.key()])
-                self.CountSentCalibMsg += 1
-                print("Count Sent Calibration Key Event : ", self.CountSentCalibMsg)
+                self.last_key_event = key_map[event.key()]
+                if not self.key_event_timer_calibration.isActive():
+                    self.process_calibration_key_event()
+                    self.key_event_timer_calibration.start()
+
+        else:
+            if isinstance(self.RcvState_Curr, bytes):
+                state_int = int.from_bytes(self.RcvState_Curr, byteorder='little') & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK
+            else:
+                state_int = self.RcvState_Curr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK
+
+            if state_int == ST_PREARMED or state_int == ST_ARMED_MANUAL :
+                key_map = {
+                    Qt.Key_I: CT_PAN_UP_START,
+                    # Qt.Key_Up: CT_PAN_UP_START,
+                    Qt.Key_L: CT_PAN_RIGHT_START,
+                    # Qt.Key_Right: CT_PAN_RIGHT_START,
+                    Qt.Key_J: CT_PAN_LEFT_START,
+                    # Qt.Key_Left: CT_PAN_LEFT_START,
+                    Qt.Key_M: CT_PAN_DOWN_START,
+                    # Qt.Key_Down: CT_PAN_DOWN_START,
+                    Qt.Key_F: CT_FIRE_START,
+                    # Qt.Key_Return: CT_FIRE_START,
+                }
+                if event.key() in key_map:
+                    # self.set_command(key_map[event.key()])
+                    # self.CountSentCmdMsg += 1
+                    # print("Count Sent Command Key Event : ", self.CountSentCmdMsg)
+                    self.last_key_event = key_map[event.key()]
+                    if not self.key_event_timer_command.isActive():
+                        self.process_command_key_event()
+                        self.key_event_timer_command.start()
+
+    def process_calibration_key_event(self):
+        if self.last_key_event is not None:
+            self.send_calib_to_server(self.last_key_event)
+            self.CountSentCalibMsg += 1
+            print("Count Sent Calibration Key Event : ", self.CountSentCalibMsg)
+            self.last_key_event = None
+
+    def process_command_key_event(self):
+        if self.last_key_event is not None:
+            self.set_command(self.last_key_event)
+            self.CountSentCmdMsg += 1
+            print("Count Sent Command Key Event : ", self.CountSentCmdMsg)
+            self.last_key_event = None
 
     # def keyReleaseEvent(self, event):
     #     key_map = {
@@ -896,7 +848,6 @@ if __name__ == "__main__":
 
     # Set the callback function for image update
     set_uimsg_update_callback(mainWin.callback_msg)
-    # set_image_update_callback(mainWin.callback_image_msg)
 
     mainWin.show()
     sys.exit(app.exec_())
