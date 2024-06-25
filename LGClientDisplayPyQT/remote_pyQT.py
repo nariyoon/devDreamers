@@ -90,7 +90,7 @@ class Form1(QMainWindow):
     prearm_code = "12345678" # temporarily code
     engage_order = "0123456789" # temporarily order
 
-    # For counting sent to Robot message
+    # Model : Counter of sent to Robot messages
     CountSentCmdMsg = 0
     CountSentCalibMsg = 0
 
@@ -105,9 +105,16 @@ class Form1(QMainWindow):
 
     def __init__(self):
         super().__init__()
+        # # Define thread shutdown event repository
+        # self.threads = []  # 스레드 목록을 저장할 리스트
+        # self.shutdown_events = []  # 각 스레드 종료를 위한 이벤트 목록
+        # # self.thread_shutdown_events = {}  # 스레드 이름을 키로 하고 종료 이벤트를 값으로 하는 ARRAY
 
-        # self.initUI()
-        self.image_processing_thread = ImageProcessingThread()
+		# Event to signal the threads to shut down
+        self.shutdown_event = threading.Event()
+
+        # Starting the Image Processing Thread
+        self.image_processing_thread = ImageProcessingThread(self.shutdown_event)
         self.image_processing_thread.image_processed.connect(self.update_picturebox)
         self.image_processing_thread.start()
 
@@ -118,7 +125,7 @@ class Form1(QMainWindow):
         # Connect the log signal to the log message slot
         self.log_signal.connect(self.append_log_message)
 
-        # Model : user_model is inserted from sub-directory config.ini file
+        # Connecting to Model : user_model is inserted from sub-directory config.ini file
         self.user_model = UserModel()
         print(self.user_model)
 
@@ -209,7 +216,8 @@ class Form1(QMainWindow):
         # self.editState.setReadOnly(True)
         
         self.pictureBox = QLabel(self)
-        self.pictureBox.setFixedSize(800, 640)  # Adjust size to 3/4 of the original
+        # self.pictureBox.setFixedSize(800, 640)  # Adjust size to 3/4 of the original
+        self.pictureBox.setFixedSize(960, 544)  # Set size to match sending original image
         self.pictureBox.setAlignment(Qt.AlignCenter)
 
         # layout = QVBoxLayout()
@@ -340,7 +348,8 @@ class Form1(QMainWindow):
             self.log_message("Already connected, disconnect first.")
             return
 
-        self.tcp_thread = threading.Thread(target=common_start, args=(ip, port))
+        # self.shutdown_tcpevent = threading.Event()  # add for shutdown of event
+        self.tcp_thread = threading.Thread(target=common_start, args=(ip, port, self.shutdown_event)) # modify for shutdown of event
         self.tcp_thread.start()
         self.log_message("Connecting.....")
         
@@ -671,9 +680,20 @@ class Form1(QMainWindow):
     ###################################################################
     # Image presentation showing thread close
     ###################################################################
+    # def closeEvent(self, event):
+    #     self.image_processing_thread.stop()
+    #     event.accept()
     def closeEvent(self, event):
+        # QThread of image_processing_thread stop event
         self.image_processing_thread.stop()
         event.accept()
+
+        # Terminate tcp_thread
+        self.shutdown_event.set() 
+        self.tcp_thread.join()
+
+        print("All threads are closed successfully.")
+        super().closeEvent(event)  # 기본 종료 이벤트 수행
 
     ###################################################################
     # callback_msg 처리할때 MT 메시지 종류에 따라 차등 처리 기능 구현

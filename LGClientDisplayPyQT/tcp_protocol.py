@@ -60,7 +60,7 @@ def set_uimsg_update_callback(callback):
 frame_queue = Queue(maxsize=10)
 frame_stack = LifoQueue(maxsize=10)
 
-def tcp_ip_thread(ip, port):
+def tcp_ip_thread(ip, port, shutdown_event):
     """
     This thread handles TCP/IP communication with the Raspberry Pi.
     """
@@ -83,7 +83,8 @@ def tcp_ip_thread(ip, port):
     packedData = struct.pack(">IIB", 1, MT_ERROR, errorCode)
     sendMsgToUI(packedData)
 
-    while True:
+    # while True:
+    while not shutdown_event.is_set():
         try:
             # Receive the message header
             headerData = clientSock.recv(8)
@@ -138,6 +139,7 @@ def tcp_ip_thread(ip, port):
             packedData = struct.pack(">IIB", 9, MT_ERROR, ERR_CONNECTION_LOST)
             sendMsgToUI(packedData)
             break
+        pass
 
     clientSock.close()
     print("Network Thread Exit")

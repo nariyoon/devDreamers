@@ -86,9 +86,10 @@ def init_image_processing_model():
     model = YOLO(f"{script_dir}/image_algo/models/best.pt")
     return model
 
-def image_processing_thread(QUEUE, model):
+def image_processing_thread(QUEUE, model, shutdown_event):
     DATA = {}
-    while True:
+    # while True:
+    while not shutdown_event.is_set():
         if not QUEUE.empty():
             frame = QUEUE.get()
             if frame is None:
@@ -149,4 +150,6 @@ def image_processing_thread(QUEUE, model):
             if key == ord('q'):
                 cv2.destroyAllWindows()
                 break
+    pass
+    print("Main Image Process Thread Exit")
 
