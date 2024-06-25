@@ -47,15 +47,15 @@ class ImageProcessingThread(QThread):
                     qt_image = QImage(img_rgb.data, w, h, bytes_per_line, QImage.Format_RGB888)
                     pixmap = QPixmap.fromImage(qt_image)
 
-                    # Add red cross hair in pixmap
+                    # # Add red cross hair in pixmap
                     painter = QPainter(pixmap)
-                    pen = QPen(QColor(255, 0, 0), 2)
-                    painter.setPen(pen)
-                    center_x = w // 2
-                    center_y = h // 2
-                    half_size = 30  # Change the crosshair size if needed
-                    painter.drawLine(center_x - half_size, center_y, center_x + half_size, center_y)
-                    painter.drawLine(center_x, center_y - half_size, center_x, center_y + half_size)
+                    # pen = QPen(QColor(255, 0, 0), 2)
+                    # painter.setPen(pen)
+                    # center_x = w // 2
+                    # center_y = h // 2
+                    # half_size = 30  # Change the crosshair size if needed
+                    # painter.drawLine(center_x - half_size, center_y, center_x + half_size, center_y)
+                    # painter.drawLine(center_x, center_y - half_size, center_x, center_y + half_size)
                     # painter.end()
 
                     # Draw boxes from box_info
@@ -69,7 +69,7 @@ class ImageProcessingThread(QThread):
                             painter.setPen(QPen(QColor(173, 255, 47), 3))
                             painter.drawText(x1, y1 - 5, box_info['label'])
                             # painter.drawEllipse(int((x1 + x2) / 2) - 3, int((y1 + y2) / 2) - 3, 6, 6)
-
+                          
                     painter.end()
 
                     self.image_processed.emit(pixmap)
