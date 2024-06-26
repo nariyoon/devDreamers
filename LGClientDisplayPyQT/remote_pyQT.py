@@ -12,7 +12,7 @@ from PyQt5.QtCore import pyqtSignal, pyqtSlot, Qt, QTimer, QMetaObject, Q_ARG # 
 from PyQt5.QtGui import QIntValidator
 from usermodel.usermodel import UserModel
 from tcp_protocol import sendMsgToCannon, set_uimsg_update_callback
-from common import common_start
+from common import common_init, common_start
 from queue import Queue
 from image_process_ui import ImageProcessingThread
 # from sip import qRegisterMetaType  # Import qRegisterMetaType from sip module
@@ -114,7 +114,7 @@ class Form1(QMainWindow):
         self.shutdown_event = threading.Event()
 
         # Starting the Image Processing Thread
-        self.image_processing_thread = ImageProcessingThread(self.shutdown_event)
+        self.image_processing_thread = ImageProcessingThread()
         self.image_processing_thread.image_processed.connect(self.update_picturebox)
         self.image_processing_thread.start()
 
@@ -155,6 +155,9 @@ class Form1(QMainWindow):
 
         # # tcp_thread용 frame queue 정의
         # self.frame_queue = Queue(maxsize=20)  # Frame queue
+        
+        # For June, Separate and Initialize the image algorithm
+        common_init()
 
         self.show()
 
@@ -347,7 +350,7 @@ class Form1(QMainWindow):
         if hasattr(self, 'tcp_thread') and self.tcp_thread.is_alive():
             self.log_message("Already connected, disconnect first.")
             return
-
+        
         # self.shutdown_tcpevent = threading.Event()  # add for shutdown of event
         self.tcp_thread = threading.Thread(target=common_start, args=(ip, port, self.shutdown_event)) # modify for shutdown of event
         self.tcp_thread.start()
@@ -680,18 +683,19 @@ class Form1(QMainWindow):
     ###################################################################
     # Image presentation showing thread close
     ###################################################################
-    # def closeEvent(self, event):
-    #     self.image_processing_thread.stop()
-    #     event.accept()
     def closeEvent(self, event):
         # QThread of image_processing_thread stop event
         self.image_processing_thread.stop()
         event.accept()
 
-        # Terminate tcp_thread
-        self.shutdown_event.set() 
-        self.tcp_thread.join()
-
+        # Terminate tcp_thread if it has been created
+        if hasattr(self, 'tcp_thread') and self.tcp_thread.is_alive():
+            self.shutdown_event.set()
+            self.tcp_thread.join()
+            print("TCP thread is closed successfully.")
+        else:
+            print("TCP thread was not active or not created.")
+        
         print("All threads are closed successfully.")
         super().closeEvent(event)  # 기본 종료 이벤트 수행
 
@@ -774,7 +778,7 @@ class Form1(QMainWindow):
             socket_state = int(socket_state)
             # self.SocketState = socket_state
             # print("MT_STATE Received as", self.RcvState_Curr, " ", rcv_state)
-            print("Socket Message Received", socket_state)
+            print("Socket State Received", socket_state)
             self.updateSocketState(socket_state)
         else:
             # print test

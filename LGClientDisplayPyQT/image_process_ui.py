@@ -5,14 +5,15 @@ from PyQt5.QtGui import QPixmap, QImage, QPainter, QPen, QColor
 import cv2
 import numpy as np
 from image_process import get_result_model
+import threading
 # from remote_pyQT import getCurrentRcvState
 
 class ImageProcessingThread(QThread):
     image_processed = pyqtSignal(QPixmap)
 
-    def __init__(self, shutdown_event, parent=None):
+    def __init__(self, parent=None):
         super().__init__(parent)
-        self.shutdown_event = shutdown_event
+        # self.shutdown_event = shutdown_event
         self.image_data = None
         self.rcv_state_curr = None
         self.running = True
@@ -35,8 +36,8 @@ class ImageProcessingThread(QThread):
             # time.sleep(1)  # Sleep for 1 second before checking again
 
     def run(self):
-        # while not self.shutdown_event.is_set():
         while self.running:
+        # while not self.shutdown_event.is_set():
             if self.image_data is not None:
                 np_arr = np.frombuffer(self.image_data, np.uint8)
                 img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
@@ -75,6 +76,7 @@ class ImageProcessingThread(QThread):
 
                     self.image_processed.emit(pixmap)
                 self.image_data = None
+                print("Image processing thread stopped.")
 
     def update_image_data(self, image_data):
         self.image_data = image_data
@@ -82,3 +84,4 @@ class ImageProcessingThread(QThread):
     def stop(self):
         self.running = False
         self.wait()
+        print("Image processing UI thread is closed successfully.")
