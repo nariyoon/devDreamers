@@ -98,6 +98,9 @@ def tcp_ip_thread(ip, port, shutdown_event):
             headerData = clientSock.recv(8)
             if len(headerData) != struct.calcsize('II'):
                 print("Connection lost.")
+                print("lost message header ", ' '.join(f'0x{byte:02x}' for byte in headerData))
+                packedData = struct.pack(">IIB", 1, MT_ERROR, ERR_CONNECTION_LOST)
+                sendMsgToUI(packedData)
                 break
 
             # Unpack the message header
@@ -149,7 +152,7 @@ def tcp_ip_thread(ip, port, shutdown_event):
 
         except socket.error as e:
             print("Connection lost:", str(e))
-            packedData = struct.pack(">IIB", 9, MT_ERROR, ERR_CONNECTION_LOST)
+            packedData = struct.pack(">IIB", 1, MT_ERROR, ERR_CONNECTION_LOST)
             sendMsgToUI(packedData)
             break
         pass

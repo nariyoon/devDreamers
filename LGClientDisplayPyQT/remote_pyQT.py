@@ -1,6 +1,7 @@
 import sys
 import zmq
 import threading
+import socket
 import struct
 import cv2
 import re
@@ -61,6 +62,7 @@ CT_PAN_DOWN_STOP = 0xF7
 CT_FIRE_STOP = 0xEF
 
 # Define calibration codes
+LT_CAL_COMPLETE = 0x00
 LT_DEC_X = 0x01
 LT_INC_X = 0x02
 LT_DEC_Y = 0x04
@@ -103,6 +105,10 @@ class Form1(QMainWindow):
     # Define a signal to emit log messages
     log_signal = pyqtSignal(str)
 
+    # Define HeartbeatTimer Start and Stop event from other thread
+    startHeartbeat = pyqtSignal(int)  # 타이머 시작 신호
+    stopHeartbeat = pyqtSignal()      # 타이머 중지 신호
+
     def __init__(self):
         super().__init__()
         # # Define thread shutdown event repository
@@ -137,10 +143,15 @@ class Form1(QMainWindow):
         self.recv_callback = None
         self.send_command_callback = None
 
-        # Socket related 타이머 설정
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self.HeartBeatTimer_event)
-        # self.timer.start(1000)  # 1000 밀리초 = 1초
+        # # Socket related 타이머 설정
+        self.HeartbeatTimer = QTimer(self)
+        self.HeartbeatTimer.timeout.connect(self.HeartBeatTimer_event)
+        # self.HeartbeatTimer = QTimer(self)
+        # self.HeartbeatTimer.timeout.connect(self.HeartBeatTimer_event)
+        # self.HeartbeatTimer.start(1000)  # 1000 밀리초 = 1초
+        # Connect signal and slot for HeartTimer
+        self.startHeartbeat.connect(self.HeartbeatTimer.start)
+        self.stopHeartbeat.connect(self.HeartbeatTimer.stop)
 
         # Key Message Event 관련 타이머 설정
         self.key_event_timer_command = QTimer(self)
@@ -361,7 +372,26 @@ class Form1(QMainWindow):
             return
         
         # self.shutdown_tcpevent = threading.Event()  # add for shutdown of event
-        self.tcp_thread = threading.Thread(target=common_start, args=(ip, port, self.shutdown_event, self)) # modify for shutdown of event
+        self.tcp_thread = threading.Thread(target=common_start, args=(ip, port, self.shutdown_event)) # modify for shutdown of event
+        self.tcp_thread.start()
+        self.log_message("Connecting.....")
+        
+        self.user_model.save_to_config(ip, port)
+        self.setAllUIEnabled(True, False)
+
+    def reconnect(self):
+        ip = self.editIPAddress.text()
+        port = int(self.editTCPPort.text())
+        self.log_message(f"Reconnecting to {ip}:{port}")
+
+        # 아직 tcp_thread가 살아있는 경우 제거하고 다시 접속 필요
+        if hasattr(self, 'tcp_thread') and self.tcp_thread.is_alive():
+            self.shutdown_event.set()       # Signal the thread to stop
+            self.tcp_thread.join()
+            self.shutdown_event.clear()
+        
+        # self.shutdown_tcpevent = threading.Event()  # add for shutdown of event
+        self.tcp_thread = threading.Thread(target=common_start, args=(ip, port, self.shutdown_event)) # modify for shutdown of event
         self.tcp_thread.start()
         self.log_message("Connecting.....")
         
@@ -391,14 +421,16 @@ class Form1(QMainWindow):
 
     @pyqtSlot()
     def disconnect(self):
-        self.log_message("Disconnected")
+        # self.log_message("Disconnected")
 
         if hasattr(self, 'tcp_thread') and self.tcp_thread.is_alive():
             # self.frame_queue.put(None)  # Signal the thread to stop
+            self.shutdown_event.set()       # Signal the thread to stop
             self.tcp_thread.join()
-            self.log_message("Disconnected")
         
+        self.log_message("Disconnected")
         self.setAllUIEnabled(False, False)
+        self.shutdown_event.clear()
 
     @pyqtSlot()
     def pre_arm_enable(self):
@@ -476,6 +508,9 @@ class Form1(QMainWindow):
                 state_int |= (ST_ARMED_MANUAL|ST_CALIB_ON)
             self.send_state_change_request_to_server(state_int)
         else:
+            # send calibration complete message to robot
+            self.send_calib_to_server(self, LT_CAL_COMPLETE)
+
             # state_int should be 8
             state_int &= ST_CLEAR_CALIB_MASK
             self.send_state_change_request_to_server(state_int)
@@ -674,6 +709,7 @@ class Form1(QMainWindow):
         if socketstate == SOCKET_SUCCESS:
             self.SocketState = SOCKET_SUCCESS
             self.log_message("Robot is connected successfully")
+            self.stopHeartbeat.emit()  # 메인 스레드에서 타이머 중지
 
         elif socketstate == SOCKET_FAIL_TO_CONNECT:
             self.SocketState = SOCKET_FAIL_TO_CONNECT
@@ -681,13 +717,18 @@ class Form1(QMainWindow):
             # self.buttonConnect.setEnabled(True)
             # self.buttonDisconnect.setEnabled(False)
             self.log_message("Robot is failed to connect")
+            self.disconnect()
 
         elif socketstate == SOCKET_CONNECTION_LOST:
             self.SocketState = SOCKET_CONNECTION_LOST
             self.setAllUIEnabled(False, False)
             # self.buttonConnect.setEnabled(True)
             # self.buttonDisconnect.setEnabled(False)
-            self.log_message("Robot's connection is lost")
+            self.log_message("Robot's connection is lost - Starting retry to connect....")
+            # self.HeartBeatTimer_event()
+            if not self.HeartbeatTimer.isActive():
+                # self.HeartbeatTimer.start(10000)
+                self.startHeartbeat.emit(10000)  # HeartbeatTimer starts
 
     ###################################################################
     # Image presentation showing thread close
@@ -774,6 +815,15 @@ class Form1(QMainWindow):
             if self.RcvState_Curr != self.RcvState_Prev:
                 self.RcvState_Prev = self.RcvState_Curr
             
+        # 나머지 MT_MSG 들은 byte 배열이 들어오므로 bit -> little 변환이 필요함, 송신도 마찬가지
+        elif type_msg == MT_TEXT:
+            # print MT_TEXT            
+            # Buffer to store the received message
+            text_data = bytearray(len_msg)
+            text_data = message[8:8 + len_msg]
+            text_str = text_data.decode('ascii')  # 'ascii' 대신 'utf-8'을 사용해도 됩니다.
+            self.log_message(f"TEXT Received : {text_str}")
+
         elif type_msg == MT_SOCKET:
             # print test
             print("Socket Message Received", type_msg)
@@ -796,7 +846,31 @@ class Form1(QMainWindow):
 
     # Using heartbeat timer, in order to detect the robot control sw to set abnormal state
     def HeartBeatTimer_event(self):
-        self.log_message("Timer event: sending message to cannon")
+        self.log_message("Attempting to reconnect...")
+        # if self.check_server(self.editIPAddress.text(), self.editTCPPort.text()):
+        ip = self.editIPAddress.text()
+        port = int(self.editTCPPort.text())
+        if self.check_server(ip, port):
+            print("Server is up! Stopping the timer.")
+            self.HeartbeatTimer.stop()
+            # Theads.settimeout(5)  # 5 seconds timeout
+            self.reconnect()
+        else:
+            print("Server check failed, will retry in 10 seconds.")
+        self.connect()
+
+    def check_server(self, ip, port):
+        # Simple TCP socket to check the server
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(5)  # 5 seconds timeout
+            try:
+                # 서버에 연결 시도
+                serverAddress = (ip, port)
+                sock.connect(serverAddress)
+                return True
+            except socket.error as e:
+                print(f"Failed to connect to {ip}:{port}, error: {e}")
+                return False
 
     def keyPressEvent(self, event):
         if (self.RcvState_Curr & ST_CALIB_ON) == ST_CALIB_ON :
