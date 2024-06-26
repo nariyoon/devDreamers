@@ -65,6 +65,8 @@ def set_uimsg_update_callback(callback):
 # frame_queue와 processed_queue를 tcp_protocol.py로 옮김
 frame_queue = Queue(maxsize=10)
 frame_stack = LifoQueue(maxsize=10)
+task_queue = Queue()
+stopEvent = threading.Event()
 
 def tcp_ip_thread(ip, port, shutdown_event):
     """
@@ -148,44 +150,12 @@ def tcp_ip_thread(ip, port, shutdown_event):
     clientSock.close()
     print("Network Thread Exit")
 
-def sendMsgToCannon(msg):
-    global clientSock
-    global cannonStatus
 
-    type = msg[4:8]
-    value = msg[8:]
-
-    typeInt = int.from_bytes(type, byteorder='big')
-    print("msg: ", msg, "len: ", len(msg), "type: ", typeInt, "value: ", value)
-    if typeInt == MT_TARGET_SEQUENCE:
-       print("type is MT_TARGET_SEQUENCE: ", value)
-       stopEvent = threading.Event()
-       armedThread = threading.Thread(target=buildTagetOrientation, args=(value, stopEvent))
-       armedThread.start()
-       armedThread.join()
-       print("armedThread has stopped.")
-    elif typeInt == MT_STATE_CHANGE_REQ:
-        print("type is MT_STATE_CHANGE_REQ")
-        clientSock.sendall(msg)
-    elif typeInt == MT_PREARM:
-        print("type is MT_PREARM")
-        clientSock.sendall(msg)
-    else:
-        print("type is MT_ELSE")
-        clientSock.sendall(msg)
-
-def sendMsgToUI(msg):
-    if uimsg_update_callback:
-        uimsg_update_callback(msg)
-    else:
-        print("No callback function set for image update.")
-
-def buildTagetOrientation(msg, stopEvent):
+def buildTargetOrientation(msg):
     print("target sequence: ", msg)
 
     # get target orientation
     global clientSock
-    #data = bytearray()
     cnt = 0
     buffer = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
     for i in msg:
@@ -193,13 +163,6 @@ def buildTagetOrientation(msg, stopEvent):
             buffer[cnt] = i - 48
             cnt = cnt + 1
 
-    # add length and type
-    #dataLen = 8 # x coordiate(4byte) + y coordinate(4byte)
-    #data.extend(struct.pack('>II', dataLen, MT_TARGET_DIFF))
-
-    # add target amount
-    #data.extend(struct.pack('>I', cnt))
-    
     targetLabelData = get_result_model()
     if targetLabelData is not None:
         print("Target Info")
@@ -207,7 +170,6 @@ def buildTagetOrientation(msg, stopEvent):
             print("target num: ", buffer[i])
             for target in targetLabelData['target_info']:
                 label = target.get('label', 'N/A')
-                #print(f"!! Label: {label}", "label int: ", int(label))
                 if buffer[i] == int(label):
                     detectCnt = 0
                     lastPan = -9999.99
@@ -222,10 +184,8 @@ def buildTagetOrientation(msg, stopEvent):
                         targetCenterData = get_result_model()
                         for target in targetCenterData['target_info']:
                             label = target.get('label', 'N/A')
-                            #print(f"Label: {label}", "label int: ", int(label))
                             if buffer[i] == int(label):
                                 center = target.get('center', [0, 0])
-                                #print("center: ", center)
                                 break
                         
                         centerX = 0
@@ -239,28 +199,23 @@ def buildTagetOrientation(msg, stopEvent):
                                 centerY = value
                         
                         if lastX == centerX and lastY == centerY:
-                            #print("last: ", lastX, " ", lastY, "center: ", center)
                             continue
 
                         lastX = centerX
                         lastY = centerY
 
-                        # length and type
                         data.extend(struct.pack('>II', 8, MT_TARGET_DIFF))
 
-                        # x coordinate
                         panError = (centerX + 70) - WIDTH/2
                         pan = pan - panError/75
                         convertValue = send_float(pan)
                         data.extend(struct.pack('>I', convertValue))
 
-                        # y coordinate
                         tiltError = (centerY - 88) - HEIGHT/2
                         tilt = tilt - tiltError/75
                         convertValue = send_float(tilt)
                         data.extend(struct.pack('>I', convertValue))
 
-                        #print("@@", lastPan, " ", lastTilt, " ", pan, " ", tilt)
                         if compareCoordinate(lastPan, lastTilt, pan, tilt) == True:
                             detectCnt = detectCnt + 1
                             print("detectCnt: ", detectCnt)
@@ -268,28 +223,13 @@ def buildTagetOrientation(msg, stopEvent):
                         lastPan = pan
                         lastTilt = tilt
 
-                        # send msg
                         print("data: ", data)
                         clientSock.sendall(data)
-
-                        #print("100ms sleep")
-                        #time.sleep(0.1)
-                        # count = 0
-                        # for value in center:
-                        #     if count == 0:
-                        #         calValue = (WIDTH / 2 - value) / 46 #24 #12
-                        #         count = 1
-                        #     else:
-                        #         calValue = (HEIGHT / 2 - value) / 7 # 13.6 #6.8
-                        #     convertValue = send_float(calValue)
-                        #     print(f"calValue: {calValue}, convertValue: {convertValue}")
-                        #     data.extend(struct.pack('>I', convertValue))
                 
                     data = bytearray()
                     data.extend(struct.pack('>II', 0, MT_FIRE))
                     print("fire: ", data)
                     clientSock.sendall(data)
-                    # exit for taget if label is found
                     break
         
         data = bytearray()
@@ -298,8 +238,70 @@ def buildTagetOrientation(msg, stopEvent):
         clientSock.sendall(data)
     else:
         print("no target_info")
-    
-    stopEvent.set()
+
+
+def sendMsgToCannon(msg):
+    global clientSock
+    global cannonStatus
+
+    type = msg[4:8]
+    value = msg[8:]
+
+    typeInt = int.from_bytes(type, byteorder='big')
+    print("msg: ", msg, "len: ", len(msg), "type: ", typeInt, "value: ", value)
+    if typeInt == MT_TARGET_SEQUENCE:
+        print("type is MT_TARGET_SEQUENCE: ", value)
+        task_queue.put(value)
+    elif typeInt == MT_STATE_CHANGE_REQ:
+        print("type is MT_STATE_CHANGE_REQ")
+        clientSock.sendall(msg)
+    elif typeInt == MT_PREARM:
+        print("type is MT_PREARM")
+        clientSock.sendall(msg)
+    else:
+        print("type is MT_ELSE")
+        clientSock.sendall(msg)
+
+# def sendMsgToCannon(msg):
+#     global clientSock
+#     global cannonStatus
+
+#     type = msg[4:8]
+#     value = msg[8:]
+
+#     typeInt = int.from_bytes(type, byteorder='big')
+#     print("msg: ", msg, "len: ", len(msg), "type: ", typeInt, "value: ", value)
+#     if typeInt == MT_TARGET_SEQUENCE:
+#        print("type is MT_TARGET_SEQUENCE: ", value)
+#        stopEvent = threading.Event()
+#        armedThread = threading.Thread(target=buildTagetOrientation, args=(value, stopEvent))
+#        armedThread.start()
+#        armedThread.join()
+#        print("armedThread has stopped.")
+#     elif typeInt == MT_STATE_CHANGE_REQ:
+#         print("type is MT_STATE_CHANGE_REQ")
+#         clientSock.sendall(msg)
+#     elif typeInt == MT_PREARM:
+#         print("type is MT_PREARM")
+#         clientSock.sendall(msg)
+#     else:
+#         print("type is MT_ELSE")
+#         clientSock.sendall(msg)
+
+def sendMsgToUI(msg):
+    if uimsg_update_callback:
+        uimsg_update_callback(msg)
+    else:
+        print("No callback function set for image update.")
+
+def buildTargetOrientationThread():
+    while not stopEvent.is_set():
+        try:
+            msg = task_queue.get(timeout=1)  # 1초 동안 기다림
+            buildTargetOrientation(msg)
+        except Queue.Empty:
+            continue
+
 
 def send_float(number):
     # float를 4바이트 네트워크 바이트 순서의 정수로 변환
