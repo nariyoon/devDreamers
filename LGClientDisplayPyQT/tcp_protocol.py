@@ -4,11 +4,11 @@ import struct
 import errno
 import cv2
 import numpy as np
-from image_process import get_result_model, get_init_status, init_model_image
+from image_process import get_result_model
 from queue import Queue, Full
-#from message_utils import sendMsgToUI
 import os
 from queue import LifoQueue
+import threading
 
 # Define message types
 MT_COMMANDS = 1
@@ -21,6 +21,8 @@ MT_STATE_CHANGE_REQ = 7
 MT_CALIB_COMMANDS = 8
 MT_TARGET_DIFF = 9
 MT_ERROR = 10
+MT_COMPLETE = 11
+MT_FIRE = 12
 
 # cannon status
 UNKNOWN = 0
@@ -37,6 +39,10 @@ CALIB_ON = 128 #0x80
 ERR_SUCCESS = 0
 ERR_FAIL_TO_CONNECT = 1
 ERR_CONNECTION_LOST = 2
+
+# image width and height
+WIDTH = 960
+HEIGHT = 544
 
 # Define message structures
 class TMesssageHeader:
@@ -116,27 +122,21 @@ def tcp_ip_thread(ip, port, shutdown_event):
                 continue
 
             packedData = struct.pack(f'>II{len(buffer)}s', len_, type_, buffer)
+            sendMsgToUI(packedData)
 
-            if type_ == MT_IMAGE:
+            if type_ == MT_IMAGE:                
                 image_buffer = buffer.copy()
                 # if frame_queue.full():
                 #         frame_queue.get()
-                # frame_queue.put(image_buffer)
+                # frame_queue.put(image_buffer)                
+
                 if frame_stack.full():
                     frame_stack.get()
                 frame_stack.put(image_buffer)
 
-                init_model_status = get_init_status()
-                
-                if init_model_status is None:
-                    init_packedData = init_model_image(buffer)
-                    sendMsgToUI(init_packedData)
-                else:
-                    sendMsgToUI(packedData)
-
             else:
                 print("len_ ", len_, "header type_ ", type_, "data_", int.from_bytes(buffer, byteorder='big'))
-                sendMsgToUI(packedData)
+                #sendMsgToUI(packedData)
 
         except socket.error as e:
             print("Connection lost:", str(e))
@@ -158,10 +158,12 @@ def sendMsgToCannon(msg):
     typeInt = int.from_bytes(type, byteorder='big')
     print("msg: ", msg, "len: ", len(msg), "type: ", typeInt, "value: ", value)
     if typeInt == MT_TARGET_SEQUENCE:
-        print("type is MT_TARGET_SEQUENCE: ", value)
-        buildData = buildTagetOrientation(value)
-        print("build msg.: ", buildData)
-        clientSock.sendall(buildData)
+       print("type is MT_TARGET_SEQUENCE: ", value)
+       stopEvent = threading.Event()
+       armedThread = threading.Thread(target=buildTagetOrientation, args=(value, stopEvent))
+       armedThread.start()
+       armedThread.join()
+       print("armedThread has stopped.")
     elif typeInt == MT_STATE_CHANGE_REQ:
         print("type is MT_STATE_CHANGE_REQ")
         clientSock.sendall(msg)
@@ -178,47 +180,126 @@ def sendMsgToUI(msg):
     else:
         print("No callback function set for image update.")
 
-def buildTagetOrientation(msg):
+def buildTagetOrientation(msg, stopEvent):
     print("target sequence: ", msg)
 
     # get target orientation
-    data = bytearray()
+    global clientSock
+    #data = bytearray()
     cnt = 0
     buffer = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
     for i in msg:
-        #print("i: ", i)
         if i != 0:
             buffer[cnt] = i - 48
             cnt = cnt + 1
 
     # add length and type
-    dataLen = ((cnt * 2) + 1) * 4 # total cnt(4byte) + x coordiate(4byte) + y coordinate(4byte)
-    data.extend(struct.pack('>II', dataLen, MT_TARGET_DIFF))
+    #dataLen = 8 # x coordiate(4byte) + y coordinate(4byte)
+    #data.extend(struct.pack('>II', dataLen, MT_TARGET_DIFF))
 
     # add target amount
-    data.extend(struct.pack('>I', cnt))
+    #data.extend(struct.pack('>I', cnt))
     
-    targetData = get_result_model()
-    if 'target_info' in targetData:
+    targetLabelData = get_result_model()
+    if targetLabelData is not None:
         print("Target Info")
         for i in range(cnt):
             print("target num: ", buffer[i])
-            for target in targetData['target_info']:
+            for target in targetLabelData['target_info']:
                 label = target.get('label', 'N/A')
-                #print(f"Label: {label}", "label int: ", int(label))
+                #print(f"!! Label: {label}", "label int: ", int(label))
                 if buffer[i] == int(label):
-                    center = target.get('center', [0, 0])
-                    for value in center:
-                        convertValue = send_float(value)
-                        data.extend(struct.pack('>I', convertValue))
+                    detectCnt = 0
+                    lastPan = -9999.99
+                    lastTilt = -9999.99
+                    lastX = 0
+                    lastY = 0
+                    pan = 0
+                    tilt = 0
+                    print("move to target")
+                    while detectCnt < 2:
+                        data = bytearray()
+                        targetCenterData = get_result_model()
+                        for target in targetCenterData['target_info']:
+                            label = target.get('label', 'N/A')
+                            #print(f"Label: {label}", "label int: ", int(label))
+                            if buffer[i] == int(label):
+                                center = target.get('center', [0, 0])
+                                #print("center: ", center)
+                                break
                         
-                    print(f"Label: {label}, Center: {center}")
+                        centerX = 0
+                        centerY = 0
+                        cnt = 0
+                        for value in center:
+                            if cnt == 0:
+                                centerX = value
+                                cnt = 1
+                            else:
+                                centerY = value
+                        
+                        if lastX == centerX and lastY == centerY:
+                            #print("last: ", lastX, " ", lastY, "center: ", center)
+                            continue
+
+                        lastX = centerX
+                        lastY = centerY
+
+                        # length and type
+                        data.extend(struct.pack('>II', 8, MT_TARGET_DIFF))
+
+                        # x coordinate
+                        panError = (centerX + 70) - WIDTH/2
+                        pan = pan - panError/75
+                        convertValue = send_float(pan)
+                        data.extend(struct.pack('>I', convertValue))
+
+                        # y coordinate
+                        tiltError = (centerY - 88) - HEIGHT/2
+                        tilt = tilt - tiltError/75
+                        convertValue = send_float(tilt)
+                        data.extend(struct.pack('>I', convertValue))
+
+                        #print("@@", lastPan, " ", lastTilt, " ", pan, " ", tilt)
+                        if compareCoordinate(lastPan, lastTilt, pan, tilt) == True:
+                            detectCnt = detectCnt + 1
+                            print("detectCnt: ", detectCnt)
+                        
+                        lastPan = pan
+                        lastTilt = tilt
+
+                        # send msg
+                        print("data: ", data)
+                        clientSock.sendall(data)
+
+                        #print("100ms sleep")
+                        #time.sleep(0.1)
+                        # count = 0
+                        # for value in center:
+                        #     if count == 0:
+                        #         calValue = (WIDTH / 2 - value) / 46 #24 #12
+                        #         count = 1
+                        #     else:
+                        #         calValue = (HEIGHT / 2 - value) / 7 # 13.6 #6.8
+                        #     convertValue = send_float(calValue)
+                        #     print(f"calValue: {calValue}, convertValue: {convertValue}")
+                        #     data.extend(struct.pack('>I', convertValue))
+                
+                    data = bytearray()
+                    data.extend(struct.pack('>II', 0, MT_FIRE))
+                    print("fire: ", data)
+                    clientSock.sendall(data)
                     # exit for taget if label is found
                     break
+        
+        data = bytearray()
+        data.extend(struct.pack('>II', 0, MT_COMPLETE))
+        print("complete: ", data)
+        clientSock.sendall(data)
     else:
         print("no target_info")
-
-    return data
+    
+    stopEvent.set()
 
 def send_float(number):
     # float를 4바이트 네트워크 바이트 순서의 정수로 변환
@@ -226,3 +307,14 @@ def send_float(number):
     uint32_val = struct.unpack('>I', packed_float)[0]  # 4바이트의 네트워크 순서의 정수로 변환
     
     return uint32_val
+
+def compareCoordinate(centerX, centerY, pan, tilt):
+    print(centerX, " ", centerY, " ", pan, " ", tilt)
+
+    x = abs(centerX - pan)
+    y = abs(centerY - tilt)
+
+    if  x < 0.5 and y < 0.5:
+        return True
+    else:
+        return False
