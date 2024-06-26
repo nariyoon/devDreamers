@@ -119,6 +119,7 @@ class Form1(QMainWindow):
 		# Event to signal the threads to shut down
         self.shutdown_event = threading.Event()
         self.img_model_global = None  # 클래스 속성으로 선언
+        self.selected_model = None
         # Starting the Image Processing Thread
         self.image_processing_thread = ImageProcessingThread()
         self.image_processing_thread.image_processed.connect(self.update_picturebox)
@@ -305,9 +306,17 @@ class Form1(QMainWindow):
     @pyqtSlot(object)
     def on_init_finished(self, img_model):
         self.img_model_global = img_model  # 클래스 속성으로 설정
+        for model in self.img_model_global:
+            model_name = model.get_name()
+            print(f"{model_name} attached")
 
     def get_img_model(self):
-        return self.img_model_global  # img_model_global 값을 반환
+        if self.img_model_global and len(self.img_model_global) > 0:
+            self.selected_model = self.img_model_global[0]
+            return self.selected_model
+        else:
+            # print("Model list is empty or not initialized.")
+            return None
 
     def setInitialValue(self):
         self.setAllUIEnabled(False, False)

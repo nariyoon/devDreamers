@@ -7,13 +7,14 @@ import struct
 from queue import Queue, Full
 from image_algo.yolov8_algo import YOLO_Detector
 from image_algo.tflite_algo import ObjectDetector
+from image_algo.opencv_algo import *
 from ultralytics import YOLO
 import numpy as np
 import os
 from datetime import datetime
 from filterpy.kalman import KalmanFilter
 import copy
-
+import torch
 
 # Add the parent directory of `image_algo` to sys.path
 script_dir = os.path.dirname(os.path.realpath(__file__))
@@ -25,39 +26,40 @@ CAP_PROP_FRAME_HEIGHT = 544
 INIT_TIME = 5
 QUEUE_MAX_SIZE = 10  # 큐의 최대 크기 설정
 
-class TFLiteAlgorithm:
-    def __init__(self, model_path):
-        self.detector = ObjectDetector(model_path)
-        self.ready = False
-        self.model_name = self.detector.model_name
-
-    def initialize(self, first_frame, ready_event):
-        # Dummy initialization logic with the first frame
-        self.detector.detect(first_frame, first_frame.copy())
-        self.ready = True
-        ready_event.set()
-
-    def detect(self, frame, draw_frame):
-        if not self.ready:
-            return draw_frame, []  # TFLite model is not ready yet, return empty result
-        return self.detector.detect(frame, draw_frame)
-
 class YOLOAlgorithm:
     def __init__(self, model_path):
         self.detector = YOLO_Detector(model_path)
-        self.ready = False
-        self.model_name = self.detector.model_name
+        self.model_name = "YOLOv8"
 
-    def initialize(self, first_frame, ready_event):
-        # Initialize the YOLO model with the first frame
-        self.detector.model.predict(first_frame, imgsz=640)
-        self.ready = True
-        ready_event.set()
+    def detect(self, frame):
+        return self.detector.detect(frame)
 
-    def detect(self, frame, draw_frame):
-        if not self.ready:
-            return draw_frame, []  # YOLO is not ready yet, return empty result
-        return self.detector.detect(frame, draw_frame)
+    def get_name(self):
+        return self.model_name
+
+class TFLiteAlgorithm:
+    def __init__(self, model_path):
+        self.detector = ObjectDetector(model_path)
+        self.model_name = "TFLite"
+
+    def detect(self, frame):
+        return self.detector.detect(frame)
+    
+    def get_name(self):
+        return self.model_name
+
+class OpenCVDefaultAlgorithm():
+    def __init__(self, symbols):
+        self.symbols = symbols
+        self.model_name = "OpenCV"
+
+    def detect(self, image):
+        squares = find_squares(image)
+        result = match_digits(image, squares, self.symbols)
+        return result
+    
+    def get_name(self):
+        return self.model_name
 
 def apply_custom_sharpening_filter(image):
     kernel = np.array([[0, -0.5, 0],
@@ -87,19 +89,74 @@ def get_result_model():
     global result_data
     return result_data
 
+
+# def init_image_processing_model():
+#     first_init = None
+
+#     # init OpenCV Default
+#     ref_image_dir = f"{script_dir}/../Targets/"
+#     num_signs = 10  # Define the number of reference images
+#     symbols = load_ref_images(ref_image_dir, num_signs)
+
+#     # init Yolo
+#     model = YOLO(f"{script_dir}/image_algo/models/best_1.pt")
+
+#     image = cv2.imread(f"{script_dir}/image_algo/models/init.jpg")
+#     image = cv2.resize(image, (CAP_PROP_FRAME_WIDTH, CAP_PROP_FRAME_HEIGHT))
+#     model.predict(image, imgsz=[960, 544], verbose=False)
+
+#     if first_init is None:
+#         first_init = True
+#         set_init_status(first_init)
+
+#     return model
+
+# 모델을 GPU로 이동하는 함수
+def to_device(model):
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model.to(device)
+    return model
+
 def init_image_processing_model():
     first_init = None
-    model = YOLO(f"{script_dir}/image_algo/models/best_1.pt")
+    models = []
 
+    # Initialize all models with a dummy frame
     image = cv2.imread(f"{script_dir}/image_algo/models/init.jpg")
     image = cv2.resize(image, (CAP_PROP_FRAME_WIDTH, CAP_PROP_FRAME_HEIGHT))
-    model.predict(image, imgsz=[960, 544], verbose=False)
+
+    # YOLOv8 model
+    yolo_model_path = f"{script_dir}/image_algo/models/best_1.pt"
+    yolo_model = YOLOAlgorithm(yolo_model_path)
+    yolo_model.detector.model.to(torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
+    yolo_model.detect(image)
+    models.append(yolo_model)
+    model_name = yolo_model.get_name()
+    print(f"{model_name} init done")
+
+    # TFLite model
+    tflite_model_path = f"{script_dir}/image_algo/models/detect.tflite"
+    tflite_model = TFLiteAlgorithm(tflite_model_path)
+    tflite_model.detect(image)
+    models.append(tflite_model)
+    model_name = tflite_model.get_name()
+    print(f"{model_name} init done")
+
+    # OpenCV model
+    opencv_symbols_path = f"{script_dir}/image_algo/models"
+    symbols = load_ref_images(opencv_symbols_path, num_signs=10)
+    opencv_model = OpenCVDefaultAlgorithm(symbols)
+    opencv_model.detect(image)
+    models.append(opencv_model)
+    model_name = opencv_model.get_name()
+    print(f"{model_name} init done")
 
     if first_init is None:
         first_init = True
         set_init_status(first_init)
 
-    return model
+    return models
+
 
 init_status = None
 def set_init_status(init):
@@ -128,7 +185,7 @@ def init_model_image(frame):
 
     # 프로그레스 바 텍스트 설정
     dots = ['.', '..', '...']
-    base_text = "YOLOv8 initializing"
+    base_text = "Detection Models initializing"
     text = f"{base_text}{dots[progress_state]}"
 
     # 다음 상태로 전환
@@ -166,49 +223,79 @@ def image_processing_thread(QUEUE, shutdown_event, form_instance):
             # print(f"width {w}, height {h}")
 
             # img_model_global 값을 가져오는 예제
-            img_model = form_instance.get_img_model()
-            if img_model is not None:
-                # print("Model is initialized and ready to use.")
-                results = img_model.predict(imageMat, imgsz=[960, 544], verbose=False)
-            else:
-                # print("Model is not initialized yet.")
+            # img_model = form_instance.get_img_model()
+            # if img_model is not None:
+            #     # print("Model is initialized and ready to use.")
+            #     results = img_model.predict(imageMat, imgsz=[960, 544], verbose=False)
+            # else:
+            #     # print("Model is not initialized yet.")
+            #     continue
+
+            models = form_instance.get_img_model()
+            if models is None:
                 continue
 
             target_info = []
             box_info = []
+
+            results = models.detect(imageMat)
             for result in results:
-                boxes = result.boxes
+                coords, label = result
+                (x1, y1), (x2, y2) = coords
 
-                if len(boxes) == 0:
+                width = x2 - x1
+                height = y2 - y1
+                if width < 20 or height < 20 or width > 100 or height > 100:
                     continue
-                for box in boxes:
-                    coords = box.xyxy[0].cpu().numpy()
-                    score = box.conf[0].cpu().item()
-                    if score < 0.5:
-                        continue
-                    x1, y1, x2, y2 = map(int, coords)
-                    width = x2 - x1
-                    height = y2 - y1
 
-                    if width < 20 or height < 20 or width > 100 or height > 100:
-                        continue
+                center_x = (x1 + x2) / 2
+                center_y = (y1 + y2) / 2
 
-                    # 라벨 번호와 박스 중심점 계산
-                    label = f"{int(box.cls[0].cpu().item())}"
-                    center_x = (x1 + x2) / 2
-                    center_y = (y1 + y2) / 2
+                target_info.append({
+                    "label": label,
+                    "center": [center_x, center_y],
+                    "size": [width, height]
+                })
 
-                    # 정보를 리스트에 추가
-                    target_info.append({
-                        "label": label,
-                        "center": [center_x, center_y],
-                        "size": [width, height]
-                    })
+                box_info.append({
+                    "label": label,
+                    "bbox": [x1, y1, x2, y2]
+                })
 
-                    box_info.append({
-                        "label": label,
-                        "bbox": [x1, y1, x2, y2]
-                    })
+            # for result in results:
+            #     boxes = result.boxes
+
+            #     if len(boxes) == 0:
+            #         continue
+            #     for box in boxes:
+            #         coords = box.xyxy[0].cpu().numpy()
+            #         score = box.conf[0].cpu().item()
+            #         if score < 0.5:
+            #             continue
+            #         x1, y1, x2, y2 = map(int, coords)
+            #         width = x2 - x1
+            #         height = y2 - y1
+
+            #         if width < 20 or height < 20 or width > 100 or height > 100:
+            #             continue
+
+            #         # 라벨 번호와 박스 중심점 계산
+            #         label = f"{int(box.cls[0].cpu().item())}"
+
+            #         center_x = (x1 + x2) / 2
+            #         center_y = (y1 + y2) / 2
+
+            #         # 정보를 리스트에 추가
+            #         target_info.append({
+            #             "label": label,
+            #             "center": [center_x, center_y],
+            #             "size": [width, height]
+            #         })
+
+            #         box_info.append({
+            #             "label": label,
+            #             "bbox": [x1, y1, x2, y2]
+            #         })
 
             # DATA 딕셔너리에 업데이트
             DATA['target_info'] = target_info
