@@ -4,7 +4,7 @@ import struct
 import errno
 import cv2
 import numpy as np
-from image_process import get_result_model
+from image_process import get_result_model, get_init_status, init_model_image
 from queue import Queue, Full
 import os
 from queue import LifoQueue
@@ -124,7 +124,6 @@ def tcp_ip_thread(ip, port, shutdown_event):
                 continue
 
             packedData = struct.pack(f'>II{len(buffer)}s', len_, type_, buffer)
-            sendMsgToUI(packedData)
 
             if type_ == MT_IMAGE:                
                 image_buffer = buffer.copy()
@@ -136,9 +135,17 @@ def tcp_ip_thread(ip, port, shutdown_event):
                     frame_stack.get()
                 frame_stack.put(image_buffer)
 
+                init_model_status = get_init_status()
+                
+                if init_model_status is None:
+                    init_packedData = init_model_image(buffer)
+                    sendMsgToUI(init_packedData)
+                else:
+                    sendMsgToUI(packedData)
+
             else:
                 print("len_ ", len_, "header type_ ", type_, "data_", int.from_bytes(buffer, byteorder='big'))
-                #sendMsgToUI(packedData)
+                sendMsgToUI(packedData)
 
         except socket.error as e:
             print("Connection lost:", str(e))
