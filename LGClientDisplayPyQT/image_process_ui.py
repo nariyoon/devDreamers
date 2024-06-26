@@ -5,8 +5,7 @@ from PyQt5.QtGui import QPixmap, QImage, QPainter, QPen, QColor
 import cv2
 import numpy as np
 from image_process import get_result_model
-import threading
-# from remote_pyQT import getCurrentRcvState
+from image_algo.kalman_filter import KalmanBoxTracker
 
 class ImageProcessingThread(QThread):
     image_processed = pyqtSignal(QPixmap)
@@ -17,6 +16,7 @@ class ImageProcessingThread(QThread):
         self.image_data = None
         self.rcv_state_curr = None
         self.running = True
+        self.trackers = {}
 
     @pyqtSlot(int)
     def update_rcv_state(self, state):
@@ -51,32 +51,52 @@ class ImageProcessingThread(QThread):
 
                     # # Add red cross hair in pixmap
                     painter = QPainter(pixmap)
-                    # pen = QPen(QColor(255, 0, 0), 2)
-                    # painter.setPen(pen)
-                    # center_x = w // 2
-                    # center_y = h // 2
-                    # half_size = 30  # Change the crosshair size if needed
-                    # painter.drawLine(center_x - half_size, center_y, center_x + half_size, center_y)
-                    # painter.drawLine(center_x, center_y - half_size, center_x, center_y + half_size)
-                    # painter.end()
+                    pen = QPen(QColor(255, 0, 0), 2)
+                    painter.setPen(pen)
+                    center_x = w // 2
+                    center_y = h // 2
+                    half_size = 30  # Change the crosshair size if needed
+                    painter.drawLine(center_x - half_size, center_y, center_x + half_size, center_y)
+                    painter.drawLine(center_x, center_y - half_size, center_x, center_y + half_size)
 
                     # Draw boxes from box_info
                     result_data = get_result_model()
                     if result_data and 'box_info' in result_data:
                         box_info_list = result_data['box_info']
-                        for box_info in box_info_list:
+                        for i, box_info in enumerate(box_info_list):
                             x1, y1, x2, y2 = box_info['bbox']
+                            label = box_info['label']
+                            width = x2 - x1
+                            height = y2 - y1
+
+                            if label not in self.trackers:
+                                self.trackers[label] = KalmanBoxTracker()
+
+                            tracker = self.trackers[label]
+                            target_info = result_data['target_info'][i]
+                            t_center_x, t_center_y = target_info['center']
+
+                            # Į�� ���� ������Ʈ �� ����
+                            tracker.update(np.array([t_center_x, t_center_y]))
+                            predicted_center = tracker.predict()
+
+                            px1 = int(predicted_center[0] - width / 2)
+                            py1 = int(predicted_center[1] - height / 2)
+                            px2 = int(predicted_center[0] + width / 2)
+                            py2 = int(predicted_center[1] + height / 2)
+
                             painter.setPen(QPen(QColor(173, 255, 47), 3))
-                            painter.drawRect(x1, y1, x2 - x1, y2 - y1)
+                            painter.drawRect(px1, py1, px2 - px1, py2 - py1)
                             painter.setPen(QPen(QColor(173, 255, 47), 3))
-                            painter.drawText(x1, y1 - 5, box_info['label'])
-                            # painter.drawEllipse(int((x1 + x2) / 2) - 3, int((y1 + y2) / 2) - 3, 6, 6)
+                            painter.drawText(px1, py1 - 5, label)
+                            painter.setPen(QPen(QColor(255, 0, 0), 3))
+                            # painter.drawEllipse(int(predicted_center[0]) - 3, int(predicted_center[1]) - 3, 6, 6)
                           
                     painter.end()
 
                     self.image_processed.emit(pixmap)
                 self.image_data = None
-                print("Image processing thread stopped.")
+                # print("Image processing thread stopped.")
 
     def update_image_data(self, image_data):
         self.image_data = image_data

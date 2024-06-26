@@ -67,11 +67,6 @@ def image_processing_task(frame_queue, processed_queue, algorithms, ready_events
                         cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
         processed_queue.put(draw_frame)
 
-def load_ref_images(ref_image_dir, num_signs):
-    # Dummy function to load reference images
-    # Replace with actual loading code
-    return []
-
 class OpenCVDefaultAlgorithm:
     def __init__(self, symbols):
         self.ready = False

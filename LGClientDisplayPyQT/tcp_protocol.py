@@ -4,7 +4,7 @@ import struct
 import errno
 import cv2
 import numpy as np
-from image_process import get_result_model
+from image_process import get_result_model, get_init_status, init_model_image
 from queue import Queue, Full
 #from message_utils import sendMsgToUI
 import os
@@ -118,17 +118,21 @@ def tcp_ip_thread(ip, port, shutdown_event):
             packedData = struct.pack(f'>II{len(buffer)}s', len_, type_, buffer)
 
             if type_ == MT_IMAGE:
-
-                sendMsgToUI(packedData)
-
                 image_buffer = buffer.copy()
                 # if frame_queue.full():
                 #         frame_queue.get()
-                # frame_queue.put(image_buffer)                
-
+                # frame_queue.put(image_buffer)
                 if frame_stack.full():
                     frame_stack.get()
                 frame_stack.put(image_buffer)
+
+                init_model_status = get_init_status()
+                
+                if init_model_status is None:
+                    init_packedData = init_model_image(buffer)
+                    sendMsgToUI(init_packedData)
+                else:
+                    sendMsgToUI(packedData)
 
             else:
                 print("len_ ", len_, "header type_ ", type_, "data_", int.from_bytes(buffer, byteorder='big'))

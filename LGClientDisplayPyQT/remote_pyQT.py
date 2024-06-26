@@ -12,7 +12,7 @@ from PyQt5.QtCore import pyqtSignal, pyqtSlot, Qt, QTimer, QMetaObject, Q_ARG # 
 from PyQt5.QtGui import QIntValidator
 from usermodel.usermodel import UserModel
 from tcp_protocol import sendMsgToCannon, set_uimsg_update_callback
-from common import common_init, common_start
+from common import InitModelThread, common_start
 from queue import Queue
 from image_process_ui import ImageProcessingThread
 # from sip import qRegisterMetaType  # Import qRegisterMetaType from sip module
@@ -112,7 +112,7 @@ class Form1(QMainWindow):
 
 		# Event to signal the threads to shut down
         self.shutdown_event = threading.Event()
-
+        self.img_model_global = None  # 클래스 속성으로 선언
         # Starting the Image Processing Thread
         self.image_processing_thread = ImageProcessingThread()
         self.image_processing_thread.image_processed.connect(self.update_picturebox)
@@ -157,7 +157,9 @@ class Form1(QMainWindow):
         # self.frame_queue = Queue(maxsize=20)  # Frame queue
         
         # For June, Separate and Initialize the image algorithm
-        common_init()
+        self.init_thread = InitModelThread()
+        self.init_thread.finished.connect(self.on_init_finished)
+        self.init_thread.start()
 
         self.show()
 
@@ -289,6 +291,13 @@ class Form1(QMainWindow):
     # def set_send_command_callback(self, callback):
     #     self.send_command_callback = callback
 
+    @pyqtSlot(object)
+    def on_init_finished(self, img_model):
+        self.img_model_global = img_model  # 클래스 속성으로 설정
+
+    def get_img_model(self):
+        return self.img_model_global  # img_model_global 값을 반환
+
     def setInitialValue(self):
         self.setAllUIEnabled(False, False)
         self.editIPAddress.setText(self.user_model.ip)
@@ -352,7 +361,7 @@ class Form1(QMainWindow):
             return
         
         # self.shutdown_tcpevent = threading.Event()  # add for shutdown of event
-        self.tcp_thread = threading.Thread(target=common_start, args=(ip, port, self.shutdown_event)) # modify for shutdown of event
+        self.tcp_thread = threading.Thread(target=common_start, args=(ip, port, self.shutdown_event, self)) # modify for shutdown of event
         self.tcp_thread.start()
         self.log_message("Connecting.....")
         
