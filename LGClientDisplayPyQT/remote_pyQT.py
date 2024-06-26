@@ -372,7 +372,7 @@ class Form1(QMainWindow):
             return
         
         # self.shutdown_tcpevent = threading.Event()  # add for shutdown of event
-        self.tcp_thread = threading.Thread(target=common_start, args=(ip, port, self.shutdown_event)) # modify for shutdown of event
+        self.tcp_thread = threading.Thread(target=common_start, args=(ip, port, self.shutdown_event, self)) # modify for shutdown of event
         self.tcp_thread.start()
         self.log_message("Connecting.....")
         
@@ -391,7 +391,7 @@ class Form1(QMainWindow):
             self.shutdown_event.clear()
         
         # self.shutdown_tcpevent = threading.Event()  # add for shutdown of event
-        self.tcp_thread = threading.Thread(target=common_start, args=(ip, port, self.shutdown_event)) # modify for shutdown of event
+        self.tcp_thread = threading.Thread(target=common_start, args=(ip, port, self.shutdown_event, self)) # modify for shutdown of event
         self.tcp_thread.start()
         self.log_message("Connecting.....")
         

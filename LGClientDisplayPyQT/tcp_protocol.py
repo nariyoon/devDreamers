@@ -66,7 +66,6 @@ def set_uimsg_update_callback(callback):
 frame_queue = Queue(maxsize=10)
 frame_stack = LifoQueue(maxsize=10)
 task_queue = Queue()
-stopEvent = threading.Event()
 
 def tcp_ip_thread(ip, port, shutdown_event):
     """
@@ -161,7 +160,7 @@ def tcp_ip_thread(ip, port, shutdown_event):
     print("Network Thread Exit")
 
 
-def buildTargetOrientation(msg):
+def buildTagetOrientation(msg):
     print("target sequence: ", msg)
 
     # get target orientation
@@ -272,44 +271,18 @@ def sendMsgToCannon(msg):
         print("type is MT_ELSE")
         clientSock.sendall(msg)
 
-# def sendMsgToCannon(msg):
-#     global clientSock
-#     global cannonStatus
-
-#     type = msg[4:8]
-#     value = msg[8:]
-
-#     typeInt = int.from_bytes(type, byteorder='big')
-#     print("msg: ", msg, "len: ", len(msg), "type: ", typeInt, "value: ", value)
-#     if typeInt == MT_TARGET_SEQUENCE:
-#        print("type is MT_TARGET_SEQUENCE: ", value)
-#        stopEvent = threading.Event()
-#        armedThread = threading.Thread(target=buildTagetOrientation, args=(value, stopEvent))
-#        armedThread.start()
-#        armedThread.join()
-#        print("armedThread has stopped.")
-#     elif typeInt == MT_STATE_CHANGE_REQ:
-#         print("type is MT_STATE_CHANGE_REQ")
-#         clientSock.sendall(msg)
-#     elif typeInt == MT_PREARM:
-#         print("type is MT_PREARM")
-#         clientSock.sendall(msg)
-#     else:
-#         print("type is MT_ELSE")
-#         clientSock.sendall(msg)
-
 def sendMsgToUI(msg):
     if uimsg_update_callback:
         uimsg_update_callback(msg)
     else:
         print("No callback function set for image update.")
 
-def buildTargetOrientationThread():
-    while not stopEvent.is_set():
+def buildTargetOrientationThread(shutdown_event):
+    while not shutdown_event.is_set():
         try:
-            msg = task_queue.get(timeout=1)  # 1초 동안 기다림
-            buildTargetOrientation(msg)
-        except Queue.Empty:
+            msg = task_queue.get()  # 1초 동안 기다림
+            buildTagetOrientation(msg)
+        except task_queue.empty():
             continue
 
 
@@ -320,11 +293,11 @@ def send_float(number):
     
     return uint32_val
 
-def compareCoordinate(centerX, centerY, pan, tilt):
-    print(centerX, " ", centerY, " ", pan, " ", tilt)
+def compareCoordinate(lastPan, lastTilt, pan, tilt):
+    print(lastPan, " ", pan, " ", lastTilt, " ", tilt)
 
-    x = abs(centerX - pan)
-    y = abs(centerY - tilt)
+    x = abs(lastPan - pan)
+    y = abs(lastTilt - tilt)
 
     if  x < 0.5 and y < 0.5:
         return True

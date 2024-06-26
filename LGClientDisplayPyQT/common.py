@@ -1,6 +1,6 @@
 import threading
 from queue import Queue
-from tcp_protocol import buildTargetOrientationThread, tcp_ip_thread, frame_queue, frame_stack, stopEvent
+from tcp_protocol import buildTargetOrientationThread, tcp_ip_thread, frame_queue, frame_stack
 from image_process import init_image_processing_model, image_processing_thread
 from PyQt5.QtCore import QThread, pyqtSignal
 
@@ -25,8 +25,8 @@ def common_start(ip, port, shutdown_event, form_instance):
     tcp_thread.start()
 
     # 스레드 생성 및 시작
-    build_thread = threading.Thread(target=buildTargetOrientationThread)
-    build_thread.start()
+    armed_thread = threading.Thread(target=buildTargetOrientationThread, args=(shutdown_event,))
+    armed_thread.start()
 
     # 이미지 처리 스레드 실행
     processing_thread = threading.Thread(target=image_processing_thread, args=(frame_stack, shutdown_event, form_instance))
@@ -37,8 +37,7 @@ def common_start(ip, port, shutdown_event, form_instance):
     frame_stack.put(None)  # 종료 신호
     processing_thread.join()
 
-    stopEvent.set()
-    build_thread.join()
+    armed_thread.join()
 
 	# 정리 작업 수행
     print("Common thread is closed successfully.")
