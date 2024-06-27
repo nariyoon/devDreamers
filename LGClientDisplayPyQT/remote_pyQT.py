@@ -18,7 +18,7 @@ from queue import Queue
 from image_process_ui import ImageProcessingThread
 from image_process import init_image_processing_model
 import os
-
+import qdarktheme
 
 # from sip import qRegisterMetaType  # Import qRegisterMetaType from sip module
 
@@ -159,6 +159,7 @@ class DevWindow(QMainWindow):
         ui_file = 'new_remote.ui'
         ui_mainwindow = uic.loadUi(ui_file, self)
 
+        app.setStyleSheet(qdarktheme.load_stylesheet())
         self.initUI()
 
         self.recv_callback = None
