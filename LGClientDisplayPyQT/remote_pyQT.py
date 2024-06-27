@@ -13,9 +13,13 @@ from PyQt5.QtCore import pyqtSignal, pyqtSlot, Qt, QTimer, QMetaObject, Q_ARG # 
 from PyQt5.QtGui import QIntValidator
 from usermodel.usermodel import UserModel
 from tcp_protocol import sendMsgToCannon, set_uimsg_update_callback
-from common import InitModelThread, common_start
+from common import common_start
 from queue import Queue
 from image_process_ui import ImageProcessingThread
+from image_process import init_image_processing_model
+import os
+
+
 # from sip import qRegisterMetaType  # Import qRegisterMetaType from sip module
 
 # # Register QTextCursor with QMetaType
@@ -116,10 +120,14 @@ class Form1(QMainWindow):
         # self.shutdown_events = []  # 각 스레드 종료를 위한 이벤트 목록
         # # self.thread_shutdown_events = {}  # 스레드 이름을 키로 하고 종료 이벤트를 값으로 하는 ARRAY
 
+      
+
 		# Event to signal the threads to shut down
-        self.shutdown_event = threading.Event()
-        self.img_model_global = None  # 클래스 속성으로 선언
+        self.shutdown_event = threading.Event()        
+
+        self.img_model_global = init_image_processing_model()
         self.selected_model = None
+
         # Starting the Image Processing Thread
         self.image_processing_thread = ImageProcessingThread()
         self.image_processing_thread.image_processed.connect(self.update_picturebox)
@@ -168,11 +176,6 @@ class Form1(QMainWindow):
         # # tcp_thread용 frame queue 정의
         # self.frame_queue = Queue(maxsize=20)  # Frame queue
         
-        # For June, Separate and Initialize the image algorithm
-        self.init_thread = InitModelThread()
-        self.init_thread.finished.connect(self.on_init_finished)
-        self.init_thread.start()
-
         self.show()
 
     def initUI(self):
@@ -303,12 +306,6 @@ class Form1(QMainWindow):
     # def set_send_command_callback(self, callback):
     #     self.send_command_callback = callback
 
-    @pyqtSlot(object)
-    def on_init_finished(self, img_model):
-        self.img_model_global = img_model  # 클래스 속성으로 설정
-        for model in self.img_model_global:
-            model_name = model.get_name()
-            print(f"{model_name} attached")
 
     def get_img_model(self):
         if self.img_model_global and len(self.img_model_global) > 0:

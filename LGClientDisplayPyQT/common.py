@@ -6,17 +6,6 @@ from PyQt5.QtCore import QThread, pyqtSignal
 
 # frame_queue와 processed_queue를 tcp_protocol.py로 옮김
 
-# Separate common_init() for implementation of Disconnect and Re-connection 
-class InitModelThread(QThread):
-    finished = pyqtSignal(object)  # 초기화 완료 신호
-
-    def run(self):
-        print("init model start")
-        # 여기에 오래 걸리는 초기화 작업을 수행
-        img_model = init_image_processing_model()
-        print("image model loading done")
-        self.finished.emit(img_model)
-
 # After connection, running main thread 
 def common_start(ip, port, shutdown_event, form_instance):
     # while not shutdown_event.is_set():
