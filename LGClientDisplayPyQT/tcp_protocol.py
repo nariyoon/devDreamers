@@ -53,6 +53,7 @@ class TMesssageHeader:
 
 # global variables
 clientSock = 0
+fps = 0
 
 # Define for updating image to UI
 uimsg_update_callback = None
@@ -85,9 +86,6 @@ def tcp_ip_thread(ip, port, shutdown_event):
         errorCode = ERR_FAIL_TO_CONNECT
         packedData = struct.pack(">IIB", 1, MT_ERROR, errorCode)
         sendMsgToUI(packedData) # ERR_FAIL_TO_CONNECT
-
-        clientSock.close()
-        print("Network Thread Exit")
         return
 
     errorCode = ERR_SUCCESS
@@ -95,6 +93,9 @@ def tcp_ip_thread(ip, port, shutdown_event):
     sendMsgToUI(packedData)
 
     # while True:
+    global fps
+    frameCnt = 0
+    startTime = time.time()
     while not shutdown_event.is_set():
         try:
             # Receive the message header
@@ -131,7 +132,7 @@ def tcp_ip_thread(ip, port, shutdown_event):
 
             packedData = struct.pack(f'>II{len(buffer)}s', len_, type_, buffer)
 
-            if type_ == MT_IMAGE:                
+            if type_ == MT_IMAGE:
                 image_buffer = buffer.copy()
                 # if frame_queue.full():
                 #   frame_queue.get()
@@ -142,12 +143,22 @@ def tcp_ip_thread(ip, port, shutdown_event):
                 frame_stack.put(image_buffer)
 
                 init_model_status = get_init_status()
-                
+
                 if init_model_status is None:
                     init_packedData = init_model_image(buffer)
                     sendMsgToUI(init_packedData)
                 else:
                     sendMsgToUI(packedData)
+
+                # calculate the frame
+                time.sleep(0.01)
+                frameCnt += 1
+                currentTime = time.time()
+                elapsedTime = currentTime - startTime
+                
+                if elapsedTime > 0:
+                    fps = frameCnt / elapsedTime
+                    #print(f"FPS: {fps:.2f}", end='\r')
 
             else:
                 #print("len_ ", len_, "header type_ ", type_, "data_", int.from_bytes(buffer, byteorder='big'))
@@ -193,7 +204,7 @@ def buildTagetOrientation(msg):
                     sameCoordinateCnt = 0
                     print("move to target")
                     while detectCnt < 1:
-                        time.sleep(0.2)
+                        time.sleep(0.1)
                         data = bytearray()
                         targetCenterData = get_result_model()
                         for target in targetCenterData['target_info']:
@@ -289,9 +300,9 @@ def buildTargetOrientationThread(shutdown_event):
             continue
 
 def send_float(number):
-    # float를 4바이트 네트워크 바이트 순서의 정수로 변환
-    packed_float = struct.pack('>f', number)  # '>'는 big-endian을 의미함
-    uint32_val = struct.unpack('>I', packed_float)[0]  # 4바이트의 네트워크 순서의 정수로 변환
+    # change float to int by 4byte network order
+    packed_float = struct.pack('>f', number)
+    uint32_val = struct.unpack('>I', packed_float)[0]
     
     return uint32_val
 
@@ -305,3 +316,8 @@ def compareCoordinate(lastPan, lastTilt, pan, tilt):
         return True
     else:
         return False
+
+def getFps():
+    global fps
+
+    return fps
