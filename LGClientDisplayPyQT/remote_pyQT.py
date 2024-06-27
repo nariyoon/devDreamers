@@ -136,6 +136,7 @@ class DevWindow(QMainWindow):
 		# Event to signal the threads to shut down
         self.shutdown_event = threading.Event()        
 
+        # Define three models to expand extensibility
         self.img_model_global = init_image_processing_model()
         self.selected_model = None
 
@@ -189,8 +190,36 @@ class DevWindow(QMainWindow):
         
         self.show()
 
+    # def print_models(self):
+    #     # img_model_global에 저장된 모델 정보 출력
+    #     if self.img_model_global:
+    #         for model in self.img_model_global:
+    #             print(f"Model loaded: {model.get_name()}")
+    #     else:
+    #         print("No models are loaded.")
+    def update_model_combobox(self):
+        # Clear existing items
+        self.comboBoxChangeAlgorithm.clear()
+        
+        # Check if models are loaded
+        if self.img_model_global:
+            # Populate the combo box with model names
+            for model in self.img_model_global:
+                self.comboBoxChangeAlgorithm.addItem(model.get_name())
+            # Set the first item as the default selected item
+            self.comboBoxChangeAlgorithm.setCurrentIndex(0)
+        else:
+            # Optionally handle the case where no models are loaded
+            self.comboBoxChangeAlgorithm.addItem("No models available")
+            # Set the first item as the default selected item
+            self.comboBoxChangeAlgorithm.setCurrentIndex(0)
+
     def initUI(self):
+        # self.print_models()
         intValidator = QIntValidator()
+    
+        # update combobox of image model
+        self.update_model_combobox()
 
         # setValidator
         self.editEngageOrder.setValidator(intValidator)
@@ -218,9 +247,8 @@ class DevWindow(QMainWindow):
         self.buttonLeft.setIcon(QIcon('resources/arrow_left.png'))
         self.buttonFire.setIcon(QIcon('resources/exit.png'))
 
-
         self.stackedWidget.setCurrentIndex(0)
-    
+
         self.log_message("Init Start...")
         self.setInitialValue()
         self.updateSystemState()
@@ -237,7 +265,7 @@ class DevWindow(QMainWindow):
 
     def get_img_model(self):
         if self.img_model_global and len(self.img_model_global) > 0:
-            self.selected_model = self.img_model_global[0]
+            # self.selected_model = self.img_model_global[0]
             return self.selected_model
         else:
             # print("Model list is empty or not initialized.")
@@ -347,14 +375,23 @@ class DevWindow(QMainWindow):
         # self.setAllUIEnabled(True, True)    
     
     def on_combobox_changed_algorithm(self, index):
-        print(f"on_combobox_changed_algorithm... index: {index}")
-        # TODO 
-        if index == 0 :
-            self.changeToYolo()
-        elif index == 1:
-            self.changeToOpenCV()
+        # print(f"on_combobox_changed_algorithm... index: {index}")
+        # self.selected_model = self.img_model_global(index)
+        # print(f"on_combobox_changed_algorithm... SELECTED: {self.img_model_global(index)}")
+        # print(f"on_combobox_changed_algorithm... index: {index}")
+        if 0 <= index < len(self.img_model_global):
+            self.selected_model = self.img_model_global[index]
+            print(f"on_combobox_changed_algorithm... SELECTED: {self.img_model_global[index].get_name()}")
         else:
-            self.changeToTensorFlow()
+            print("Invalid index or model list is empty")
+            self.selected_model = None
+
+        # if index == 0 :
+        #     self.changeToYolo()
+        # elif index == 1:
+        #     self.changeToOpenCV()
+        # else:
+        #     self.changeToTensorFlow()
             
     def toggle_calibrate(self):
         if self.buttonCalibrate.isChecked():
@@ -733,8 +770,8 @@ class DevWindow(QMainWindow):
             self.labelState.setText("ARMED") 
             self.log_message(f"MT_STATE : ARMED_{state_int}")
         else:
-            print("MT_STATE_GGGG_recv STATE : ", state_int)
-            self.labelState.setText("MT_STATE : GGGG") 
+            print("MT_STATE : ", state_int)
+            self.labelState.setText("MT_STATE : UNEXPECTED") 
             self.log_message(f"MT_STATE : EXCEPTION_{state_int}")
             # self.send_state_change_request_to_server()
         
@@ -776,8 +813,9 @@ class DevWindow(QMainWindow):
 
         # Terminate tcp_thread if it has been created
         if hasattr(self, 'tcp_thread') and self.tcp_thread.is_alive():
+            print("TCP thread is tried to be closed...")
             self.shutdown_event.set()
-            self.tcp_thread.join()
+            self.tcp_thread.join(timeout=5)  # 최대 5초 대기
             print("TCP thread is closed successfully.")
         else:
             print("TCP thread was not active or not created.")
@@ -857,7 +895,7 @@ class DevWindow(QMainWindow):
             # Buffer to store the received message
             text_data = bytearray(len_msg)
             text_data = message[8:8 + len_msg]
-            text_str = text_data.decode('ascii')  # 'ascii' 대신 'utf-8'을 사용해도 됩니다.
+            text_str = text_data.decode('utf-8')  # 'ascii' 대신 'utf-8'을 사용해도 됩니다.
             self.log_message(f"TEXT Received : {text_str}")
 
         elif type_msg == MT_SOCKET:
@@ -918,6 +956,7 @@ class DevWindow(QMainWindow):
             }
             # if self.RcvState_Curr == ST_CALIB_ON: 
             if event.key() in key_map:
+                print(f"cal_key_send")
                 self.last_key_event = key_map[event.key()]
                 if not self.key_event_timer_calibration.isActive():
                     self.process_calibration_key_event()
@@ -929,7 +968,18 @@ class DevWindow(QMainWindow):
             else:
                 state_int = self.RcvState_Curr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK
 
-            if state_int == ST_PREARMED or state_int == ST_ARMED_MANUAL :
+            if state_int == ST_PREARMED:
+                key_map = {
+                    Qt.Key_I: CT_PAN_UP_START,
+                    # Qt.Key_Up: CT_PAN_UP_START,
+                    Qt.Key_L: CT_PAN_RIGHT_START,
+                    # Qt.Key_Right: CT_PAN_RIGHT_START,
+                    Qt.Key_J: CT_PAN_LEFT_START,
+                    # Qt.Key_Left: CT_PAN_LEFT_START,
+                    Qt.Key_M: CT_PAN_DOWN_START,
+                    # Qt.Key_Down: CT_PAN_DOWN_START,
+                }
+            elif state_int == ST_ARMED_MANUAL:
                 key_map = {
                     Qt.Key_I: CT_PAN_UP_START,
                     # Qt.Key_Up: CT_PAN_UP_START,
@@ -942,15 +992,41 @@ class DevWindow(QMainWindow):
                     Qt.Key_F: CT_FIRE_START,
                     # Qt.Key_Return: CT_FIRE_START,
                 }
+            else:
+                key_map = {}
                 if event.key() in key_map:
                     # self.set_command(key_map[event.key()])
                     # self.CountSentCmdMsg += 1
                     # print("Count Sent Command Key Event : ", self.CountSentCmdMsg)
+                    print(f"command_key_send")
                     self.last_key_event = key_map[event.key()]
                     if not self.key_event_timer_command.isActive():
                         self.process_command_key_event()
                         self.key_event_timer_command.start()
 
+    def keyReleaseEvent(self, event):
+        if isinstance(self.RcvState_Curr, bytes):
+            state_int = int.from_bytes(self.RcvState_Curr, byteorder='little') & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK 
+        else:
+            state_int = self.RcvState_Curr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK
+            
+        if state_int == ST_ARMED_MANUAL:
+            key_map = {
+                Qt.Key_F: CT_FIRE_STOP,
+                # Qt.Key_Return: CT_FIRE_STOP
+            }
+        else:
+            key_map = {}
+
+        # if self.RcvState_Curr == ST_ARMED_MANUAL: 
+        if event.key() in key_map:
+            # self.set_command(key_map[event.key()])
+            print(f"command_key_release")
+            self.last_key_event = key_map[event.key()]
+            if not self.key_event_timer_command.isActive():
+                self.process_command_key_event()
+                self.key_event_timer_command.start()
+    
     def process_calibration_key_event(self):
         if self.last_key_event is not None:
             self.send_calib_to_server(self.last_key_event)
@@ -964,26 +1040,6 @@ class DevWindow(QMainWindow):
             self.CountSentCmdMsg += 1
             print("Count Sent Command Key Event : ", self.CountSentCmdMsg)
             self.last_key_event = None
-
-    # def keyReleaseEvent(self, event):
-    #     key_map = {
-    #         Qt.Key_I: CT_PAN_UP_STOP,
-    #         Qt.Key_Up: CT_PAN_UP_STOP,
-    #         Qt.Key_L: CT_PAN_RIGHT_STOP,
-    #         Qt.Key_Right: CT_PAN_RIGHT_STOP,
-    #         Qt.Key_J: CT_PAN_LEFT_STOP,
-    #         Qt.Key_Left: CT_PAN_LEFT_STOP,
-    #         Qt.Key_M: CT_PAN_DOWN_STOP,
-    #         Qt.Key_Down: CT_PAN_DOWN_STOP,
-    #         Qt.Key_F: CT_FIRE_STOP,
-    #         Qt.Key_Return: CT_FIRE_STOP
-    #     }
-
-    #     # if self.RcvState_Curr == ST_ARMED_MANUAL: 
-    #     if event.key() in key_map:
-    #         # self.set_command(key_map[event.key()])
-    #         self.CountFinishedMsg += 1
-    #         print("Count Finished Key Event : ", self.CountFinishedMsg)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
