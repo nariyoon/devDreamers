@@ -9,6 +9,7 @@ from queue import Queue, Full
 import os
 from queue import LifoQueue
 import threading
+import time
 
 # Define message types
 MT_COMMANDS = 1
@@ -130,7 +131,7 @@ def tcp_ip_thread(ip, port, shutdown_event):
             if type_ == MT_IMAGE:                
                 image_buffer = buffer.copy()
                 # if frame_queue.full():
-                #         frame_queue.get()
+                #   frame_queue.get()
                 # frame_queue.put(image_buffer)                
 
                 if frame_stack.full():
@@ -146,7 +147,7 @@ def tcp_ip_thread(ip, port, shutdown_event):
                     sendMsgToUI(packedData)
 
             else:
-                print("len_ ", len_, "header type_ ", type_, "data_", int.from_bytes(buffer, byteorder='big'))
+                #print("len_ ", len_, "header type_ ", type_, "data_", int.from_bytes(buffer, byteorder='big'))
                 sendMsgToUI(packedData)
 
         except socket.error as e:
@@ -158,7 +159,6 @@ def tcp_ip_thread(ip, port, shutdown_event):
 
     clientSock.close()
     print("Network Thread Exit")
-
 
 def buildTagetOrientation(msg):
     print("target sequence: ", msg)
@@ -181,14 +181,16 @@ def buildTagetOrientation(msg):
                 label = target.get('label', 'N/A')
                 if buffer[i] == int(label):
                     detectCnt = 0
-                    lastPan = -9999.99
-                    lastTilt = -9999.99
+                    lastPan = -99.99
+                    lastTilt = -99.99
                     lastX = 0
                     lastY = 0
                     pan = 0
                     tilt = 0
+                    sameCoordinateCnt = 0
                     print("move to target")
-                    while detectCnt < 2:
+                    while detectCnt < 1:
+                        time.sleep(0.2)
                         data = bytearray()
                         targetCenterData = get_result_model()
                         for target in targetCenterData['target_info']:
@@ -196,7 +198,7 @@ def buildTagetOrientation(msg):
                             if buffer[i] == int(label):
                                 center = target.get('center', [0, 0])
                                 break
-                        
+
                         centerX = 0
                         centerY = 0
                         cnt = 0
@@ -206,21 +208,26 @@ def buildTagetOrientation(msg):
                                 cnt = 1
                             else:
                                 centerY = value
-                        
+
                         if lastX == centerX and lastY == centerY:
+                            sameCoordinateCnt = sameCoordinateCnt + 1
+                            #print(center)
                             continue
+
+                        if sameCoordinateCnt > 500:
+                            break
 
                         lastX = centerX
                         lastY = centerY
 
                         data.extend(struct.pack('>II', 8, MT_TARGET_DIFF))
 
-                        panError = (centerX + 70) - WIDTH/2
+                        panError = (centerX) - WIDTH/2
                         pan = pan - panError/75
                         convertValue = send_float(pan)
                         data.extend(struct.pack('>I', convertValue))
 
-                        tiltError = (centerY - 88) - HEIGHT/2
+                        tiltError = (centerY - 40) - HEIGHT/2 # 70
                         tilt = tilt - tiltError/75
                         convertValue = send_float(tilt)
                         data.extend(struct.pack('>I', convertValue))
@@ -228,19 +235,21 @@ def buildTagetOrientation(msg):
                         if compareCoordinate(lastPan, lastTilt, pan, tilt) == True:
                             detectCnt = detectCnt + 1
                             print("detectCnt: ", detectCnt)
-                        
+
                         lastPan = pan
                         lastTilt = tilt
 
                         print("data: ", data)
                         clientSock.sendall(data)
-                
+
+                    print("sameCoordinateCnt: ", sameCoordinateCnt)
+                    sameCoordinateCnt = 0
                     data = bytearray()
                     data.extend(struct.pack('>II', 0, MT_FIRE))
                     print("fire: ", data)
                     clientSock.sendall(data)
                     break
-        
+
         data = bytearray()
         data.extend(struct.pack('>II', 0, MT_COMPLETE))
         print("complete: ", data)
@@ -248,10 +257,8 @@ def buildTagetOrientation(msg):
     else:
         print("no target_info")
 
-
 def sendMsgToCannon(msg):
     global clientSock
-    global cannonStatus
 
     type = msg[4:8]
     value = msg[8:]
@@ -261,14 +268,7 @@ def sendMsgToCannon(msg):
     if typeInt == MT_TARGET_SEQUENCE:
         print("type is MT_TARGET_SEQUENCE: ", value)
         task_queue.put(value)
-    elif typeInt == MT_STATE_CHANGE_REQ:
-        print("type is MT_STATE_CHANGE_REQ")
-        clientSock.sendall(msg)
-    elif typeInt == MT_PREARM:
-        print("type is MT_PREARM")
-        clientSock.sendall(msg)
     else:
-        print("type is MT_ELSE")
         clientSock.sendall(msg)
 
 def sendMsgToUI(msg):
@@ -280,11 +280,10 @@ def sendMsgToUI(msg):
 def buildTargetOrientationThread(shutdown_event):
     while not shutdown_event.is_set():
         try:
-            msg = task_queue.get()  # 1초 동안 기다림
+            msg = task_queue.get()
             buildTagetOrientation(msg)
         except task_queue.empty():
             continue
-
 
 def send_float(number):
     # float를 4바이트 네트워크 바이트 순서의 정수로 변환
@@ -299,7 +298,7 @@ def compareCoordinate(lastPan, lastTilt, pan, tilt):
     x = abs(lastPan - pan)
     y = abs(lastTilt - tilt)
 
-    if  x < 0.5 and y < 0.5:
+    if  x < 0.3 and y < 0.3:
         return True
     else:
         return False
