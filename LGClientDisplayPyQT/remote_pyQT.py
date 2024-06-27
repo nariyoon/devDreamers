@@ -5,15 +5,15 @@ import socket
 import struct
 import cv2
 import re
+from enum import Enum
 import numpy as np
 from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QCheckBox, QLabel, QLineEdit, QTextEdit, QVBoxLayout, QGridLayout, QWidget, QMessageBox
-from PyQt5.QtGui import QPixmap #QTextCursor
+from PyQt5.QtGui import QPixmap, QIntValidator, QIcon, QMovie
 from PyQt5.QtCore import pyqtSignal, pyqtSlot, Qt, QTimer, QMetaObject, Q_ARG # , qRegisterMetaType
-# from PyQt5.QtGui import QTextCursor
-from PyQt5.QtGui import QIntValidator
 from usermodel.usermodel import UserModel
 from tcp_protocol import sendMsgToCannon, set_uimsg_update_callback
 from common import common_start
+from PyQt5 import uic
 from queue import Queue
 from image_process_ui import ImageProcessingThread
 from image_process import init_image_processing_model
@@ -77,7 +77,7 @@ SOCKET_SUCCESS = 0
 SOCKET_FAIL_TO_CONNECT = 1
 SOCKET_CONNECTION_LOST = 2
 
-class Form1(QMainWindow):
+class DevWindow(QMainWindow):
     # Model : SocketState
     SocketState = SOCKET_CONNECTION_LOST
     
@@ -100,7 +100,18 @@ class Form1(QMainWindow):
     CountSentCmdMsg = 0
     CountSentCalibMsg = 0
 
-    # Define Image thread to separate
+    # 기존코드 중복, 수석님 코드로 변경필요.
+    class State(Enum):
+        UNKNOWN = 0
+        CONNECTED = 1
+        SAFE = 2
+        PREARMED = 3
+        ARMED_MANUAL = 4
+        AUTO_ENGAGE = 5
+
+    currnet_state = State.UNKNOWN
+
+  	# Define Image thread to separate
     image_received = pyqtSignal(bytes)
     
     # Add a signal to emit RcvState_Curr changes
@@ -143,9 +154,9 @@ class Form1(QMainWindow):
         # Connecting to Model : user_model is inserted from sub-directory config.ini file
         self.user_model = UserModel()
         print(self.user_model)
-
-        self.setWindowTitle("Form1")
-        self.setGeometry(100, 100, 1024, 768)  # Adjusted size to fit more controls
+		
+        ui_file = 'new_remote.ui'
+        ui_mainwindow = uic.loadUi(ui_file, self)
 
         self.initUI()
 
@@ -179,120 +190,37 @@ class Form1(QMainWindow):
         self.show()
 
     def initUI(self):
-        self.central_widget = QWidget()
-        self.setCentralWidget(self.central_widget)
-        layout = QGridLayout()
-
         intValidator = QIntValidator()
 
-        # Controls
-        self.labelIPAddress = QLabel("IP Address:", self)
-        self.editIPAddress = QLineEdit(self)
-        self.editIPAddress.setText(self.user_model.ip)
-        self.editIPAddress.textChanged.connect(self.validCheckIpAndPort)
-
-        self.labelTCPPort = QLabel("TCP Port:", self)
-        self.editTCPPort = QLineEdit(self)
-        self.editTCPPort.setValidator(intValidator)
-        self.editTCPPort.setText(self.user_model.port)
-        self.editTCPPort.textChanged.connect(self.validCheckIpAndPort)
-
-        self.buttonConnect = QPushButton("Connect", self)
-        self.buttonConnect.setEnabled(False)
-        self.buttonDisconnect = QPushButton("Disconnect", self)
-        self.buttonDisconnect.setEnabled(False)
-
-        self.labelPreArmCode = QLabel("Pre-Arm Code:", self)
-        self.editPreArmCode = QLineEdit(self)
-        self.editPreArmCode.setText(self.prearm_code)
-        self.editPreArmCode.setEnabled(False)
-        # self.editPreArmCode.setFocusPolicy(Qt.NoFocus)  # Prevent focus
-        self.editPreArmCode.setValidator(intValidator)
-        self.editPreArmCode.textChanged.connect(self.validCheckPreArmedCode)
-        self.buttonPreArmEnable = QPushButton("Pre-Arm Enable", self)
-        self.buttonPreArmEnable.setEnabled(False)
-
-        self.checkBoxArmedManualEnable = QCheckBox("Armed Manual", self)
-        self.checkBoxArmedManualEnable.setEnabled(False)
-        self.checkBoxLaserEnable = QCheckBox("Laser Enabled", self)
-        self.checkBoxLaserEnable.setEnabled(False)
-
-        self.labelEngageOrder = QLabel("Engage Order:", self)
-        self.editEngageOrder = QLineEdit(self)
-        self.editEngageOrder.setEnabled(False)
-        self.editEngageOrder.setText(self.engage_order)
-        #  self.editEngageOrder.setFocusPolicy(Qt.NoFocus)  # Prevent focus
+        # setValidator
         self.editEngageOrder.setValidator(intValidator)
+        self.editTCPPort.setValidator(intValidator)
+
+        # setCustomValidator
+        self.editIPAddress.textChanged.connect(self.validCheckIpAndPort)
+        self.editTCPPort.textChanged.connect(self.validCheckIpAndPort)
+        self.editPreArmCode.textChanged.connect(self.validCheckPreArmedCode)
         self.editEngageOrder.textChanged.connect(self.validCheckEngageOrder)
 
-        self.checkBoxAutoEngage = QCheckBox("Auto Engage", self)
-        self.checkBoxAutoEngage.setEnabled(False)
-        self.checkBoxCalibrate = QCheckBox("Calibrate", self)
-        self.checkBoxCalibrate.setEnabled(False)
-        
-        self.labelState = QLabel("System State:", self)
-        self.editState = QLineEdit(self)
-        self.editState.setFocusPolicy(Qt.NoFocus)  # Prevent focus
-        # self.editState.setReadOnly(True)
-        
-        self.pictureBox = QLabel(self)
-        # self.pictureBox.setFixedSize(800, 640)  # Adjust size to 3/4 of the original
-        self.pictureBox.setFixedSize(960, 544)  # Set size to match sending original image
-        self.pictureBox.setAlignment(Qt.AlignCenter)
-
-        # layout = QVBoxLayout()
-        # layout.addWidget(self.pictureBox)
-        
-        # container = QWidget()
-        # container.setLayout(layout)
-        # self.setCentralWidget(container)
-
-        # self.logBox = QTextEdit(self)
-        # self.logBox.setReadOnly(True)
-        # self.logBox.setFixedHeight(100)  # Adjust height to fit approximately 5 messages
-
-        # Adding controls to layout
-        layout.addWidget(self.labelIPAddress, 0, 0)
-        layout.addWidget(self.editIPAddress, 0, 1)
-        layout.addWidget(self.labelTCPPort, 0, 2)
-        layout.addWidget(self.editTCPPort, 0, 3)
-        layout.addWidget(self.buttonConnect, 0, 4)
-        layout.addWidget(self.buttonDisconnect, 0, 5)
-
-        layout.addWidget(self.labelPreArmCode, 1, 0)
-        layout.addWidget(self.editPreArmCode, 1, 1)
-        layout.addWidget(self.buttonPreArmEnable, 1, 2)
-        layout.addWidget(self.labelState, 1, 3)
-        layout.addWidget(self.editState, 1, 4)
-
-        layout.addWidget(self.checkBoxArmedManualEnable, 2, 0)
-        layout.addWidget(self.checkBoxLaserEnable, 2, 1)
-        layout.addWidget(self.labelEngageOrder, 2, 2)
-        layout.addWidget(self.editEngageOrder, 2, 3)
-        layout.addWidget(self.checkBoxAutoEngage, 2, 4)
-        layout.addWidget(self.checkBoxCalibrate, 2, 5)
-        
-        # PictureBox to fill the remaining space
-        layout.addWidget(self.pictureBox, 3, 0, 1, 6, alignment=Qt.AlignCenter)
-        
-        self.logBox = QTextEdit(self)
-        self.logBox.setReadOnly(True)
-        self.logBox.setFixedHeight(100)  # Adjust height to fit approximately 5 messages
-        
-        # LogBox at the bottom
-        layout.addWidget(self.logBox, 4, 0, 1, 6)
-
-        self.central_widget.setLayout(layout)
-
-        # Connect buttons to their slots
+        # setListener
+        self.comboBoxSelectMode.currentIndexChanged.connect(self.on_combobox_changed_mode)
+        self.comboBoxChangeAlgorithm.currentIndexChanged.connect(self.on_combobox_changed_algorithm)
         self.buttonConnect.clicked.connect(self.connect)
         self.buttonDisconnect.clicked.connect(self.disconnect)
-        self.buttonPreArmEnable.clicked.connect(self.pre_arm_enable)
+        self.buttonPreArmEnable.clicked.connect(self.toggle_preArm)
         self.checkBoxLaserEnable.clicked.connect(self.toggle_laser)
-        self.checkBoxArmedManualEnable.clicked.connect(self.toggle_armed_manual)
-        self.checkBoxCalibrate.clicked.connect(self.toggle_calib)
-        self.checkBoxAutoEngage.clicked.connect(self.toggle_auto_engage)
+        self.buttonCalibrate.clicked.connect(self.toggle_calibrate)
 
+        # direction buttons
+        self.buttonUp.setIcon(QIcon('resources/arrow_up.png'))
+        self.buttonDown.setIcon(QIcon('resources/arrow_down.png'))
+        self.buttonRight.setIcon(QIcon('resources/arrow_right.png'))
+        self.buttonLeft.setIcon(QIcon('resources/arrow_left.png'))
+        self.buttonFire.setIcon(QIcon('resources/exit.png'))
+
+
+        self.stackedWidget.setCurrentIndex(0)
+    
         self.log_message("Init Start...")
         self.setInitialValue()
         self.updateSystemState()
@@ -319,6 +247,37 @@ class Form1(QMainWindow):
         self.setAllUIEnabled(False, False)
         self.editIPAddress.setText(self.user_model.ip)
         self.editTCPPort.setText(self.user_model.port)
+        self.initRecordLayeredViews()
+    
+
+    def initRecordLayeredViews(self):
+        self.layeredQVBox = QVBoxLayout()
+
+        # background
+        # bg_label = QLabel(self)
+        # # bg_label.setFixedSize(960, 544)
+        # bg = QPixmap(960, 544)  # QPixmap 객체 생성 및 사이즈 설정
+        # bg.fill(Qt.black)  # 배경색을 검은색으로 채움
+        # bg_label.setPixmap(bg)
+        # self.layeredQVBox.addWidget(bg_label)
+
+
+        # mv_label = QLabel(self)
+        # movie = QMovie('resources/load_dreamer.gif')  # QMovie 객체 생성 및 GIF 파일 경로 설정
+        # mv_label.setMovie(movie)
+        # movie.start()  # GIF 재생 시작
+        # self.layeredQVBox.addWidget(mv_label)
+
+        self.pictureBox = QLabel(self)
+        self.pictureBox.setFixedSize(960, 544)  # Set size to match sending original image
+        self.pictureBox.setAlignment(Qt.AlignCenter)
+        self.layeredQVBox.addWidget(self.pictureBox)
+
+        # fps 
+        self.fps = QLabel("FPSFPSFPS", self)
+        self.layeredQVBox.addWidget(self.fps)
+
+        self.overlayWidget.setLayout(self.layeredQVBox)
 
 
     def validCheckIpAndPort(self,text): 
@@ -342,12 +301,14 @@ class Form1(QMainWindow):
         if code:
             self.buttonPreArmEnable.setEnabled(True)
         else:
+            self.buttonPreArmEnable.setEnabled(False)
             self.log_message(f"Please enter preArmedCode")
 
     def validCheckEngageOrder(self,order):
         if order:
-            self.checkBoxAutoEngage.setEnabled(True)
+            self.buttonStart.setEnabled(True)
         else :
+            self.buttonStart.setEnabled(False)
             self.log_message(f"Please enter engageOrders")
 
     def check_port(self, port):
@@ -366,7 +327,55 @@ class Form1(QMainWindow):
     def update_picturebox(self, pixmap):
         self.pictureBox.setPixmap(pixmap)
         self.pictureBox.setScaledContents(True)
+		
+    def on_combobox_changed_mode(self, index):
+        widgetIndex = 1 if index==2 else 0
+        self.stackedWidget.setCurrentIndex(widgetIndex)
+        if index == 0:
+            self.currnet_state = self.State.PREARMED
+        elif index ==1:
+            self.currnet_state = self.State.ARMED_MANUAL
+        else:
+            self.currnet_state = self.State.AUTO_ENGAGE
 
+
+        # if 'Auto Engage' == self.comboBoxSelectMode.currentText():
+        #     self.current_mode = self.Mode.AUTO_ENGAGE
+        # else:
+        #     self.current_mode = self.Mode.ARAMED_MANUAL
+
+        # self.setAllUIEnabled(True, True)    
+    
+    def on_combobox_changed_algorithm(self, index):
+        print(f"on_combobox_changed_algorithm... index: {index}")
+        # TODO 
+        if index == 0 :
+            self.changeToYolo()
+        elif index == 1:
+            self.changeToOpenCV()
+        else:
+            self.changeToTensorFlow()
+            
+    def toggle_calibrate(self):
+        if self.buttonCalibrate.isChecked():
+            # TODO
+            self.send_calib()
+            self.buttonCalibrate.setText('OFF')
+        else:
+            self.send_calib()
+            self.buttonCalibrate.setText('ON')
+
+
+            
+    def toggle_preArm(self):
+        if self.buttonPreArmEnable.isChecked():
+            self.pre_arm_enable()
+        else:
+            # TODO
+            # change To SAFEMODE
+            print('Disconnecting...')
+
+    
     @pyqtSlot()
     def connect(self):
         ip = self.editIPAddress.text()
@@ -383,6 +392,7 @@ class Form1(QMainWindow):
         self.log_message("Connecting.....")
         
         self.user_model.save_to_config(ip, port)
+        self.currnet_state = self.State.SAFE
         self.setAllUIEnabled(True, False)
 
     def reconnect(self):
@@ -405,25 +415,40 @@ class Form1(QMainWindow):
         self.setAllUIEnabled(True, False)
 
     def setAllUIEnabled(self, connected, preArmed):
-        if not connected:
-            self.checkBoxAutoEngage.setChecked(False)
-            self.checkBoxCalibrate.setChecked(False)
-            self.checkBoxArmedManualEnable.setChecked(False)
-            self.checkBoxLaserEnable.setChecked(False)
+        self.updateConnectedUI(connected)
+        self.updateModeUI()
 
+    def updateConnectedUI(self, connected):
         self.editIPAddress.setEnabled(False if connected else True)
         self.editTCPPort.setEnabled(False if connected else True)
-        self.buttonConnect.setEnabled(False if connected else True)
-
-        self.buttonDisconnect.setEnabled(True if connected else False)
         self.editPreArmCode.setEnabled(True if connected else False)
+        self.buttonConnect.setEnabled(False if connected else True)
+        self.buttonDisconnect.setEnabled(True if connected else False)
+        self.buttonPreArmEnable.setEnabled(True if connected else False)
+  
+    def updateModeUI(self):
 
-        self.buttonPreArmEnable.setEnabled(False if preArmed else True)
-        self.checkBoxArmedManualEnable.setEnabled(True if preArmed else False)
-        self.checkBoxLaserEnable.setEnabled(True if preArmed else False)
-        self.editEngageOrder.setEnabled(True if preArmed else False)
-        self.checkBoxAutoEngage.setEnabled(True if preArmed else False)
-        self.checkBoxCalibrate.setEnabled(True if preArmed else False)
+        if self.currnet_state == self.State.SAFE:
+            self.comboBoxSelectMode.setEnabled(False)
+            self.editPreArmCode.setEnabled(True)
+            self.buttonPreArmEnable.setText('Ready to Pre-Armed')
+        elif self.currnet_state == self.State.PREARMED:
+            self.comboBoxSelectMode.setEnabled(True)
+            self.editPreArmCode.setEnabled(False)
+            self.buttonPreArmEnable.setText('Relase Pre-Armed')
+        elif self.currnet_state == self.State.ARMED_MANUAL:
+            self.comboBoxSelectMode.setEnabled(True)
+            self.editPreArmCode.setEnabled(False)
+            self.buttonPreArmEnable.setText('Relase Pre-Armed')
+        elif self.currnet_state == self.State.AUTO_ENGAGE:
+            self.comboBoxSelectMode.setEnabled(True)
+            self.editPreArmCode.setEnabled(False)
+            self.buttonPreArmEnable.setText('Relase Pre-Armed')
+        else:
+            self.comboBoxSelectMode.setEnabled(False)
+            self.editPreArmCode.setEnabled(True) 
+            self.buttonPreArmEnable.setText('Ready to Pre-Armed')
+        # self.comboBoxChangeAlgorithm
 
     @pyqtSlot()
     def disconnect(self):
@@ -435,6 +460,7 @@ class Form1(QMainWindow):
             self.tcp_thread.join()
         
         self.log_message("Disconnected")
+        self.currnet_state = self.State.UNKNOWN
         self.setAllUIEnabled(False, False)
         self.shutdown_event.clear()
 
@@ -461,16 +487,21 @@ class Form1(QMainWindow):
         self.RcvState_Curr = ST_PREARMED
         self.RcvState_Requested = ST_PREARMED
         self.updateSystemState()
+        self.currnet_state = self.State.PREARMED
         self.setAllUIEnabled(True, True)
 
     @pyqtSlot()
     def toggle_armed_manual(self):
-        self.log_message(f"Armed Manual Enabled: {self.checkBoxArmedManualEnable.isChecked()}")
-        print("Armed Manual Enabled: ", {self.checkBoxArmedManualEnable.isChecked()})
+        armedManual = self.comboBoxSelectMode.setCurrentIndex()==2
+        self.log_message(f"Armed Manual Enabled: {armedManual}")
+        print("Armed Manual Enabled: ", {armedManual})
         if (self.checkBoxArmedManualEnable.isChecked() == True):
-            self.send_state_change_request_to_server(ST_ARMED_MANUAL)
+            self.send_state_change_request_to_server(ST_ARMED_MANUAL) 
         else:
             self.send_state_change_request_to_server(ST_PREARMED)   
+		#TODO current State update필요
+		#self.currnet_state = self.State.ARMED_MANUAL
+
 
     @pyqtSlot()
     def toggle_laser(self):
@@ -488,7 +519,6 @@ class Form1(QMainWindow):
             if (state_int & ST_ARMED_MANUAL) == ST_ARMED_MANUAL:
                 state_int |= ST_LASER_ON
             else:
-                self.checkBoxArmedManualEnable.setChecked = True
                 state_int |= (ST_ARMED_MANUAL|ST_LASER_ON)
             self.send_state_change_request_to_server(state_int)
         else:
@@ -497,20 +527,19 @@ class Form1(QMainWindow):
             self.send_state_change_request_to_server(state_int)
     
     @pyqtSlot()
-    def toggle_calib(self):
-        self.log_message(f"Calibration Enabled: {self.checkBoxCalibrate.isChecked()}")
-        print("Calibration Enabled: ", {self.checkBoxCalibrate.isChecked()})
+    def send_calib(self):
+        self.log_message(f"Calibration Enabled: {self.buttonCalibrate.isChecked()}")
+        print("Calibration Enabled: ", {self.buttonCalibrate.isChecked()})
 
         if isinstance(self.RcvState_Curr, bytes):
             state_int = int.from_bytes(self.RcvState_Curr, byteorder='little')
         else:
             state_int = self.RcvState_Curr
 
-        if(self.checkBoxCalibrate.isChecked() == True):
+        if(self.buttonCalibrate.isChecked() == True):
             if (state_int & ST_ARMED_MANUAL) == ST_ARMED_MANUAL:
                 state_int |= ST_CALIB_ON
             else:
-                self.checkBoxArmedManualEnable.setChecked = True
                 state_int |= (ST_ARMED_MANUAL|ST_CALIB_ON)
             self.send_state_change_request_to_server(state_int)
         else:
@@ -523,9 +552,10 @@ class Form1(QMainWindow):
                     
     @pyqtSlot()
     def toggle_auto_engage(self):
+        autoEngage = self.comboBoxSelectMode.setCurrentIndex()==1
         self.log_message(f"Auto Engage Enabled: {self.checkBoxAutoEngage.isChecked()}")
-        print("Auto Engage Enabled: ", {self.checkBoxAutoEngage.isChecked()})
-        if (self.checkBoxAutoEngage.isChecked() == True):
+        print("Auto Engage Enabled: ", {autoEngage})
+        if (autoEngage == True):
             engageOrder = self.editEngageOrder.text
 
             if not engageOrder:
@@ -685,26 +715,26 @@ class Form1(QMainWindow):
             state_int = self.RcvState_Curr
 
         if (state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_UNKNOWN:
-            self.editState.setText("UNKNOWN")
+            self.labelState.setText("UNKNOWN")
             self.log_message(f"MT_STATE : UNKNOWN_{state_int}")
         elif (state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_SAFE:
-            self.editState.setText("SAFE")
+            self.labelState.setText("SAFE")
             self.log_message(f"MT_STATE : SAFE_{state_int}")
         elif (state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_PREARMED:
-            self.editState.setText("PREARMED")
+            self.labelState.setText("PREARMED")
             self.log_message(f"MT_STATE : PREARMED_{state_int}")
         elif (state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_ENGAGE_AUTO:
-            self.editState.setText("ENGAGE_AUTO")
+            self.labelState.setText("ENGAGE_AUTO")
             self.log_message(f"MT_STATE : ENGAGE_AUTO_{state_int}")
         elif (state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_ARMED_MANUAL:
-            self.editState.setText("ARMED_MANUAL") 
+            self.labelState.setText("ARMED_MANUAL") 
             self.log_message(f"MT_STATE : ARMED_MANUAL_{state_int}")
         elif (state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_ARMED:
-            self.editState.setText("ARMED") 
+            self.labelState.setText("ARMED") 
             self.log_message(f"MT_STATE : ARMED_{state_int}")
         else:
             print("MT_STATE_GGGG_recv STATE : ", state_int)
-            self.editState.setText("MT_STATE : GGGG") 
+            self.labelState.setText("MT_STATE : GGGG") 
             self.log_message(f"MT_STATE : EXCEPTION_{state_int}")
             # self.send_state_change_request_to_server()
         
@@ -957,7 +987,7 @@ class Form1(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    mainWin = Form1()
+    mainWin = DevWindow()
 
     # Set the callback function for image update
     set_uimsg_update_callback(mainWin.callback_msg)
