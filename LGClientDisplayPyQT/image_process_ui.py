@@ -6,6 +6,7 @@ import cv2
 import numpy as np
 from image_process import get_result_model
 from image_algo.kalman_filter import KalmanBoxTracker
+import time
 
 class ImageProcessingThread(QThread):
     image_processed = pyqtSignal(QPixmap)
@@ -37,6 +38,7 @@ class ImageProcessingThread(QThread):
 
     def run(self):
         while self.running:
+            time.sleep(0.05) # Tunning point
         # while not self.shutdown_event.is_set():
             if self.image_data is not None:
                 np_arr = np.frombuffer(self.image_data, np.uint8)

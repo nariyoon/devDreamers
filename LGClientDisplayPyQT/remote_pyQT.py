@@ -18,8 +18,9 @@ from queue import Queue
 from image_process_ui import ImageProcessingThread
 from image_process import init_image_processing_model
 import os
-# import qdarktheme // https://pypi.org/project/pyqtdarktheme/
+import qdarktheme
 from image_process import get_result_model
+import time
 
 # O1 : 192.168.0.224
 # S3 : 192.168.0.238
@@ -106,15 +107,6 @@ class DevWindow(QMainWindow):
     CountSentCmdMsg = 0
     CountSentCalibMsg = 0
 
-    # # 기존코드 중복, 수석님 코드로 변경필요.
-    # class State(Enum):
-    #     UNKNOWN = 0
-    #     CONNECTED = 1
-    #     SAFE = 2
-    #     PREARMED = 3
-    #     ARMED_MANUAL = 4
-    #     AUTO_ENGAGE = 5
-
     # currnet_state = State.UNKNOWN
     RcvStateCurr = ST_UNKNOWN
 
@@ -133,10 +125,6 @@ class DevWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        # # Define thread shutdown event repository
-        # self.threads = []  # 스레드 목록을 저장할 리스트
-        # self.shutdown_events = []  # 각 스레드 종료를 위한 이벤트 목록
-        # # self.thread_shutdown_events = {}  # 스레드 이름을 키로 하고 종료 이벤트를 값으로 하는 ARRAY
 
 		# Event to signal the threads to shut down
         self.shutdown_event = threading.Event()        
@@ -166,11 +154,12 @@ class DevWindow(QMainWindow):
         ui_file = 'new_remote.ui'
         ui_mainwindow = uic.loadUi(ui_file, self)
 
-        # app.setStyleSheet(qdarktheme.load_stylesheet())
+        app.setStyleSheet(qdarktheme.load_stylesheet())
         self.initUI()
 
         self.recv_callback = None
         self.send_command_callback = None
+        # self.buttonPreArmEnable.text = "PRE-ARMED"
 
         # # Socket related 타이머 설정
         self.HeartbeatTimer = QTimer(self)
@@ -182,29 +171,8 @@ class DevWindow(QMainWindow):
         self.startHeartbeat.connect(self.HeartbeatTimer.start)
         self.stopHeartbeat.connect(self.HeartbeatTimer.stop)
 
-        # Key Message Event 관련 타이머 설정
-        self.key_event_timer_command = QTimer(self)
-        self.key_event_timer_command.setInterval(100)  # 100밀리초 간격
-        self.key_event_timer_command.timeout.connect(self.process_command_key_event)
-        self.key_event_timer_command.setSingleShot(True)
-        self.key_event_timer_calibration = QTimer(self)
-        self.key_event_timer_calibration.setInterval(100)  # 100밀리초 간격
-        self.key_event_timer_calibration.timeout.connect(self.process_calibration_key_event)
-        self.key_event_timer_calibration.setSingleShot(True)
-        self.last_key_event = None
-
-        # # tcp_thread용 frame queue 정의
-        # self.frame_queue = Queue(maxsize=20)  # Frame queue
-        
         self.show()
 
-    # def print_models(self):
-    #     # img_model_global에 저장된 모델 정보 출력
-    #     if self.img_model_global:
-    #         for model in self.img_model_global:
-    #             print(f"Model loaded: {model.get_name()}")
-    #     else:
-    #         print("No models are loaded.")
     def update_model_combobox(self):
         # Clear existing items
         self.comboBoxChangeAlgorithm.clear()
@@ -228,6 +196,7 @@ class DevWindow(QMainWindow):
     
         # update combobox of image model
         self.update_model_combobox()
+        self.get_img_model() # update to image model of processing image thread
 
         # setValidator
         self.editEngageOrder.setValidator(intValidator)
@@ -247,20 +216,24 @@ class DevWindow(QMainWindow):
         self.buttonPreArmEnable.clicked.connect(self.toggle_preArm)
         self.checkBoxLaserEnable.clicked.connect(self.toggle_laser)
         self.buttonCalibrate.clicked.connect(self.toggle_calibrate)
-        self.buttonStart.clicked.connect(self.autoengagestart)
+        self.buttonStart.clicked.connect(self.send_autoengage_start)
 
         # direction buttons
         self.buttonUp.setIcon(QIcon('resources/arrow_up.png'))
         self.buttonUp.setStyleSheet("border: none;")
-
+        self.buttonUp.clicked.connect(self.clicked_command_up)
         self.buttonDown.setIcon(QIcon('resources/arrow_down.png'))
         self.buttonDown.setStyleSheet("border: none;")
+        self.buttonDown.clicked.connect(self.clicked_command_down)
         self.buttonRight.setIcon(QIcon('resources/arrow_right.png'))
         self.buttonRight.setStyleSheet("border: none;")
+        self.buttonRight.clicked.connect(self.clicked_command_right)
         self.buttonLeft.setIcon(QIcon('resources/arrow_left.png'))
         self.buttonLeft.setStyleSheet("border: none;")
+        self.buttonLeft.clicked.connect(self.clicked_command_left)
         self.buttonFire.setIcon(QIcon('resources/exit.png'))
         self.buttonFire.setStyleSheet("border: none;")
+        self.buttonFire.clicked.connect(self.clicked_command_fire)
 
         self.stackedWidget.setCurrentIndex(0)
 
@@ -269,6 +242,7 @@ class DevWindow(QMainWindow):
         self.updateSystemState()
 
         # Set focus on the main window
+        self.setFocusPolicy(Qt.StrongFocus)
         self.setFocus()
 
     # def set_recv_callback(self, callback):
@@ -328,7 +302,6 @@ class DevWindow(QMainWindow):
         self.hitResult.setText(result)
         self.hitResultHistory.append(f'{targetNumber}: {result}')
 
-
     def validCheckIpAndPort(self,text): 
         self.buttonConnect.setEnabled(False)
 
@@ -376,53 +349,67 @@ class DevWindow(QMainWindow):
         self.pictureBox.setPixmap(pixmap)
         self.pictureBox.setScaledContents(True)
 		
+    @pyqtSlot()        
     def on_combobox_changed_mode(self, index):
         widgetIndex = 1 if index==2 else 0
         self.stackedWidget.setCurrentIndex(widgetIndex)
         if index == 0:
             # self.currnet_state = self.State.PREARMED
-            self.RcvStateCurr = ST_PREARMED
+            # self.RcvStateCurr = ST_PREARMED
             self.send_state_change_request_to_server(ST_PREARMED) 
-        elif index ==1:
+        elif index == 1:
             # self.currnet_state = self.State.ARMED_MANUAL
-            self.RcvStateCurr = ST_ARMED_MANUAL
+            # self.RcvStateCurr = ST_ARMED_MANUAL
             self.send_state_change_request_to_server(ST_ARMED_MANUAL)    
         else:
-            # self.currnet_state = self.State.AUTO_ENGAGE
-            self.RcvStateCurr = ST_AUTO_ENGAGE
+            ###########################################
+            ## 1안 : Sequence + AutoEngage Switching ##
+            ###########################################
             char_array = self.get_char_array_autoengage_from_text(self.editEngageOrder)
             self.send_target_order_to_server(char_array)
             self.log_message(f"Auto Engage State is Changed: {self.editEngageOrder}")
             print("Auto Engage State is Changed: ", {self.editEngageOrder})
             self.send_state_change_request_to_server(ST_AUTO_ENGAGE)   
 
+            # ###########################################
+            # ## 2안 : Sequence + AutoEngage Switching ##
+            # ###########################################
+            # print("Auto Engage State is Changed: ", {self.editEngageOrder})
+            # self.send_state_change_request_to_server(ST_AUTO_ENGAGE)   
         self.setAllUIEnabled(True, True) 
 
-        # if 'Auto Engage' == self.comboBoxSelectMode.currentText():
-        #     self.current_mode = self.Mode.AUTO_ENGAGE
-        # else:
-        #     self.current_mode = self.Mode.ARAMED_MANUAL
+    @pyqtSlot()                
+    def send_autoengage_start(self):
+        ###########################################
+        ## 1안 : Just Start with Order           ##
+        ###########################################
+        char_array = self.get_char_array_autoengage_from_text(self.editEngageOrder)
+        self.send_target_order_to_server(char_array)
+        print("Auto Engage Fire Started: ", {self.editEngageOrder})
+        self.set_command(CT_FIRE_START)
 
-        # self.setAllUIEnabled(True, True)    
-    
+        # ###########################################
+        # ## 2안 : Switching Start to Stop         ##
+        # ###########################################
+        # current_text = self.buttonStart.text()
+        # if current_text == "START":
+        #     self.log_message(f"Auto Engage Fire Started: {self.editEngageOrder}")
+        #     self.set_command(CT_FIRE_START)  # AUTO ENGAGE 시작 상태로 전환하는 함수
+        # elif current_text == "STOP":
+        #     self.log_message(f"Auto Engage Fire Stopping: {self.editEngageOrder}")
+        #     self.set_command(CT_FIRE_STOP)  # AUTO ENGAGE 시작 상태로 전환하는 함수
+
+
+
+
+    @pyqtSlot()
     def on_combobox_changed_algorithm(self, index):
-        # print(f"on_combobox_changed_algorithm... index: {index}")
-        # self.selected_model = self.img_model_global(index)
-        # print(f"on_combobox_changed_algorithm... SELECTED: {self.img_model_global(index)}")
-        # print(f"on_combobox_changed_algorithm... index: {index}")
         if 0 <= index < len(self.img_model_global):
             self.selected_model = self.img_model_global[index]
             print(f"on_combobox_changed_algorithm... SELECTED: {self.img_model_global[index].get_name()}")
         else:
             print("Invalid index or model list is empty")
             self.selected_model = None
-
-        # if index == 0 :
-        #     self.changeToYolo()
-        # elif index == 1:
-        #     self.changeToOpenCV()
-        # else:
-        #     self.changeToTensorFlow()
             
     def toggle_calibrate(self):
         if self.buttonCalibrate.isChecked():
@@ -434,14 +421,16 @@ class DevWindow(QMainWindow):
             self.buttonCalibrate.setText('ON')
 
     def toggle_preArm(self):
-        if self.buttonPreArmEnable.isChecked():
-            self.pre_arm_enable()
-        else:
-            # TODO
-            # change To SAFEMODE
-            print('Disconnecting...')
+        current_text = self.buttonPreArmEnable.text()
+        if current_text == "PRE-ARMED":
+            self.pre_arm_enable()  # PRE-ARMED 상태로 전환하는 함수
+            # self.buttonPreArmEnable.setText('SAFE')
+            print('Try to enable Pre-Armed mode.')
+        elif current_text == "SAFE":
+            self.send_state_change_request_to_server(ST_SAFE)
+            # self.buttonPreArmEnable.setText('PRE-ARMED')
+            print('Try to return Safe mode.')
 
-    
     @pyqtSlot()
     def connect(self):
         ip = self.editIPAddress.text()
@@ -462,24 +451,24 @@ class DevWindow(QMainWindow):
         self.RcvStateCurr = ST_SAFE
         self.setAllUIEnabled(True, False)
 
-    def reconnect(self):
-        ip = self.editIPAddress.text()
-        port = int(self.editTCPPort.text())
-        self.log_message(f"Reconnecting to {ip}:{port}")
+    # def reconnect(self):
+    #     ip = self.editIPAddress.text()
+    #     port = int(self.editTCPPort.text())
+    #     self.log_message(f"Reconnecting to {ip}:{port}")
 
-        # 아직 tcp_thread가 살아있는 경우 제거하고 다시 접속 필요
-        if hasattr(self, 'tcp_thread') and self.tcp_thread.is_alive():
-            self.shutdown_event.set()       # Signal the thread to stop
-            self.tcp_thread.join()
-            self.shutdown_event.clear()
+    #     # 아직 tcp_thread가 살아있는 경우 제거하고 다시 접속 필요
+    #     if hasattr(self, 'tcp_thread') and self.tcp_thread.is_alive():
+    #         self.shutdown_event.set()       # Signal the thread to stop
+    #         self.tcp_thread.join()
+    #         self.shutdown_event.clear()
         
-        # self.shutdown_tcpevent = threading.Event()  # add for shutdown of event
-        self.tcp_thread = threading.Thread(target=common_start, args=(ip, port, self.shutdown_event, self)) # modify for shutdown of event
-        self.tcp_thread.start()
-        self.log_message("Connecting.....")
+    #     # self.shutdown_tcpevent = threading.Event()  # add for shutdown of event
+    #     self.tcp_thread = threading.Thread(target=common_start, args=(ip, port, self.shutdown_event, self)) # modify for shutdown of event
+    #     self.tcp_thread.start()
+    #     self.log_message("Connecting.....")
         
-        self.user_model.save_to_config(ip, port)
-        self.setAllUIEnabled(True, False)
+    #     self.user_model.save_to_config(ip, port)
+    #     self.setAllUIEnabled(True, False)
 
     def setAllUIEnabled(self, connected, preArmed):
         self.updateConnectedUI(connected)
@@ -494,39 +483,38 @@ class DevWindow(QMainWindow):
         self.buttonPreArmEnable.setEnabled(True if connected else False)
   
     def updateModeUI(self):
-
         if self.RcvStateCurr == ST_SAFE:
         # if self.currnet_state == self.State.SAFE:
             self.comboBoxSelectMode.setEnabled(False)
             self.editPreArmCode.setEnabled(True)
-            self.buttonPreArmEnable.setText('Ready to Pre-Armed')
+            self.buttonPreArmEnable.setText('PRE-ARMED')
             self.checkBoxLaserEnable.setEnabled(False)
             self.buttonCalibrate.setEnabled(False)
         # elif self.currnet_state == self.State.PREARMED:
         elif self.RcvStateCurr == ST_PREARMED:
             self.comboBoxSelectMode.setEnabled(True)
             self.editPreArmCode.setEnabled(False)
-            self.buttonPreArmEnable.setText('Relase Pre-Armed')
+            self.buttonPreArmEnable.setText('SAFE')
             self.checkBoxLaserEnable.setEnabled(False)
             self.buttonCalibrate.setEnabled(False)
         # elif self.currnet_state == self.State.ARMED_MANUAL:
         elif self.RcvStateCurr == ST_ARMED_MANUAL:
             self.comboBoxSelectMode.setEnabled(True)
             self.editPreArmCode.setEnabled(False)
-            self.buttonPreArmEnable.setText('Relase Pre-Armed')
+            self.buttonPreArmEnable.setText('SAFE')
             self.checkBoxLaserEnable.setEnabled(True)
             self.buttonCalibrate.setEnabled(True)
         # elif self.currnet_state == self.State.AUTO_ENGAGE:
         elif self.RcvStateCurr == ST_AUTO_ENGAGE:
             self.comboBoxSelectMode.setEnabled(True)
             self.editPreArmCode.setEnabled(False)
-            self.buttonPreArmEnable.setText('Relase Pre-Armed')
+            self.buttonPreArmEnable.setText('SAFE')
             self.checkBoxLaserEnable.setEnabled(False)
             self.buttonCalibrate.setEnabled(False)
         else:
             self.comboBoxSelectMode.setEnabled(False)
             self.editPreArmCode.setEnabled(True) 
-            self.buttonPreArmEnable.setText('Ready to Pre-Armed')
+            self.buttonPreArmEnable.setText('PRE-ARMED')
             self.checkBoxLaserEnable.setEnabled(False)
             self.buttonCalibrate.setEnabled(False)
         # self.comboBoxChangeAlgorithm
@@ -567,24 +555,9 @@ class DevWindow(QMainWindow):
         self.send_pre_arm_code_to_server(char_array)
         
         # Update Current State 
-        self.RcvStateCurr = ST_PREARMED
-        # self.RcvStateRequested = ST_PREARMED
-        # self.currnet_state = self.State.PREARMED
-        self.updateSystemState()
-        self.setAllUIEnabled(True, True)
-
-    @pyqtSlot()
-    def toggle_armed_manual(self):
-        armedManual = self.comboBoxSelectMode.setCurrentIndex()==2
-        self.log_message(f"Armed Manual Enabled: {armedManual}")
-        print("Armed Manual Enabled: ", {armedManual})
-        if (self.checkBoxArmedManualEnable.isChecked() == True):
-            self.send_state_change_request_to_server(ST_ARMED_MANUAL) 
-        else:
-            self.send_state_change_request_to_server(ST_PREARMED)   
-		#TODO current State update필요
-		#self.currnet_state = self.State.ARMED_MANUAL
-
+        # self.RcvStateCurr = ST_PREARMED
+        # self.updateSystemState()
+        # self.setAllUIEnabled(True, True)
 
     @pyqtSlot()
     def toggle_laser(self):
@@ -632,32 +605,25 @@ class DevWindow(QMainWindow):
             # state_int should be 8
             state_int &= ST_CLEAR_CALIB_MASK
             self.send_state_change_request_to_server(state_int)
-                    
-    def autoengagestart(self):
-        char_array = self.get_char_array_autoengage_from_text(self.editEngageOrder)
-        self.send_target_order_to_server(char_array)
-        print("Auto Engage Fire Started: ", {self.editEngageOrder})
-        self.set_command(CT_FIRE_START)
-        # self.send_state_change_request_to_server(ST_AUTO_ENGAGE)
 
-    @pyqtSlot()
-    def toggle_auto_engage(self):
-        autoEngage = self.comboBoxSelectMode.setCurrentIndex()==1
-        self.log_message(f"Auto Engage Enabled: {self.checkBoxAutoEngage.isChecked()}")
-        print("Auto Engage Enabled: ", {autoEngage})
-        if (autoEngage == True):
-            engageOrder = self.editEngageOrder.text
+    # @pyqtSlot()
+    # def toggle_auto_engage(self):
+    #     autoEngage = self.comboBoxSelectMode.setCurrentIndex()==1
+    #     self.log_message(f"Auto Engage Enabled: {self.checkBoxAutoEngage.isChecked()}")
+    #     print("Auto Engage Enabled: ", {autoEngage})
+    #     if (autoEngage == True):
+    #         engageOrder = self.editEngageOrder.text
 
-            if not engageOrder:
-                self.log_message(f"Please enter engageOrders")
-                print("Auto Engage Enabled: ", {autoEngage})
-            else:
-                char_array = self.get_char_array_autoengage_from_text(self.editEngageOrder)
-                self.send_target_order_to_server(char_array)
-                print("Auto Engage Enabled: ", {self.editEngageOrder})
-                self.send_state_change_request_to_server(ST_AUTO_ENGAGE)
-        else:
-            self.send_state_change_request_to_server(ST_PREARMED)  
+    #         if not engageOrder:
+    #             self.log_message(f"Please enter engageOrders")
+    #             print("Auto Engage Enabled: ", {autoEngage})
+    #         else:
+    #             char_array = self.get_char_array_autoengage_from_text(self.editEngageOrder)
+    #             self.send_target_order_to_server(char_array)
+    #             print("Auto Engage Enabled: ", {self.editEngageOrder})
+    #             self.send_state_change_request_to_server(ST_AUTO_ENGAGE)
+    #     else:
+    #         self.send_state_change_request_to_server(ST_PREARMED)  
 
     ########################################################################
     # MT_COMMANDS 전송
@@ -799,7 +765,6 @@ class DevWindow(QMainWindow):
     ########################################################################
     # Update Current System State
     def updateSystemState(self):
-        # self.log_message("Called updateSystemState Function!!_", self.RcvStateCurr)
         self.log_message("Called updateSystemState Function!!_")
         if isinstance(self.RcvStateCurr, bytes):
             state_int = int.from_bytes(self.RcvStateCurr, byteorder='little')
@@ -853,10 +818,10 @@ class DevWindow(QMainWindow):
             # self.buttonConnect.setEnabled(True)
             # self.buttonDisconnect.setEnabled(False)
             self.log_message("Robot's connection is lost - Starting retry to connect....")
-            # self.HeartBeatTimer_event()
-            if not self.HeartbeatTimer.isActive():
-                # self.HeartbeatTimer.start(10000)
-                self.startHeartbeat.emit(10000)  # HeartbeatTimer starts
+            # # self.HeartBeatTimer_event()
+            # if not self.HeartbeatTimer.isActive():
+            #     # self.HeartbeatTimer.start(10000)
+            #     self.startHeartbeat.emit(10000)  # HeartbeatTimer starts
 
     ###################################################################
     # Image presentation showing thread close
@@ -893,64 +858,34 @@ class DevWindow(QMainWindow):
 
         # MT_IMAGE는 tcp_protocol에서 직접 보내주므로 little로 변환된 데이터 수신
         if type_msg == MT_IMAGE:
-            # print test
-            # print("MT_IMAGE Received")
-
             # Buffer to store the received message
             image_data = bytearray(len_msg)
             image_data = message[8:8 + len_msg]
 
             self.image_received.emit(image_data)
 
-            # # Show the received image to picturebox
-            # np_arr = np.frombuffer(image_data, np.uint8)
-            # img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-            # if img is not None:
-            #     img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            #     h, w, ch = img_rgb.shape
-            #     bytes_per_line = ch * w
-            #     qt_image = QImage(img_rgb.data, w, h, bytes_per_line, QImage.Format_RGB888)
-            #     pixmap = QPixmap.fromImage(qt_image)
-
-            #     # Add red cross hair in pixmap
-            #     painter = QPainter(pixmap)
-            #     pen = QPen(QColor(255, 0, 0), 2)
-            #     painter.setPen(pen)
-                
-            #     # Calculate the center of the image
-            #     center_x = w // 2 # self.pictureBox.width() // 2
-            #     center_y = h // 2 # self.pictureBox.height() // 2
-
-            #     self.crosshair_size = 60
-            #     half_size = self.crosshair_size // 2
-
-            #     painter.drawLine(center_x - half_size, center_y, center_x + half_size, center_y)
-            #     painter.drawLine(center_x, center_y - half_size, center_x, center_y + half_size)
-
-            #     painter.end()
-
-            #     self.pictureBox.setPixmap(pixmap)
-            #     self.pictureBox.setScaledContents(True)
-
         # 나머지 MT_MSG 들은 byte 배열이 들어오므로 bit -> little 변환이 필요함, 송신도 마찬가지
         elif type_msg == MT_STATE:
-            # print test
+            # MT_STATE prints
             print("MT_STATE Received :", ' '.join(f'0x{byte:02x}' for byte in message))
             rcv_state = struct.unpack(">III", message)[2]
+            self.log_message(f"Received MT_STATE from Robot_{rcv_state}")
             self.RcvStateCurr = rcv_state
-            # print("MT_STATE Received as", self.RcvStateCurr, " ", rcv_state)
             self.updateSystemState()
 
-            # if self.RcvStateCurr != self.RcvStatePrev:
-            #     self.RcvStatePrev = self.RcvStateCurr
-            
+            # Update UI and Button related to State
+            compared_state = rcv_state & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK
+            if compared_state in (ST_PREARMED, ST_AUTO_ENGAGE, ST_ARMED_MANUAL):
+                self.setAllUIEnabled(True, True)
+            else :
+                self.setAllUIEnabled(True, False)
+                
         # 나머지 MT_MSG 들은 byte 배열이 들어오므로 bit -> little 변환이 필요함, 송신도 마찬가지
         elif type_msg == MT_TEXT:
-            # print MT_TEXT            
             # Buffer to store the received message
             text_data = bytearray(len_msg)
             text_data = message[8:8 + len_msg]
-            text_str = text_data.decode('utf-8')  # 'ascii' 대신 'utf-8'을 사용해도 됩니다.
+            text_str = ''.join(chr(byte) for byte in text_data if byte < 128)  # 바이트를 ASCII 문자로 변환
             self.log_message(f"TEXT Received : {text_str}")
 
         elif type_msg == MT_SOCKET:
@@ -976,17 +911,17 @@ class DevWindow(QMainWindow):
     # Using heartbeat timer, in order to detect the robot control sw to set abnormal state
     def HeartBeatTimer_event(self):
         self.log_message("Attempting to reconnect...")
-        # if self.check_server(self.editIPAddress.text(), self.editTCPPort.text()):
-        ip = self.editIPAddress.text()
-        port = int(self.editTCPPort.text())
-        if self.check_server(ip, port):
-            print("Server is up! Stopping the timer.")
-            self.HeartbeatTimer.stop()
-            # Theads.settimeout(5)  # 5 seconds timeout
-            self.reconnect()
-        else:
-            print("Server check failed, will retry in 10 seconds.")
-        self.connect()
+        # # if self.check_server(self.editIPAddress.text(), self.editTCPPort.text()):
+        # ip = self.editIPAddress.text()
+        # port = int(self.editTCPPort.text())
+        # if self.check_server(ip, port):
+        #     print("Server is up! Stopping the timer.")
+        #     self.HeartbeatTimer.stop()
+        #     # Theads.settimeout(5)  # 5 seconds timeout
+        #     self.reconnect()
+        # else:
+        #     print("Server check failed, will retry in 10 seconds.")
+        # self.connect()
 
     def check_server(self, ip, port):
         # Simple TCP socket to check the server
@@ -1000,103 +935,46 @@ class DevWindow(QMainWindow):
             except socket.error as e:
                 print(f"Failed to connect to {ip}:{port}, error: {e}")
                 return False
-            
 
+    def clicked_command_up(self):
+        print("Pressed CT_PAN_UP_START")
+        self.set_command(CT_PAN_UP_START)
+    def clicked_command_down(self):
+        print("Pressed CT_PAN_DOWN_START")
+        self.set_command(CT_PAN_DOWN_START)
+    def clicked_command_right(self):
+        print("Pressed CT_PAN_RIGHT_START")
+        self.set_command(CT_PAN_RIGHT_START)
+    def clicked_command_left(self):
+        print("Pressed CT_PAN_LEFT_START")
+        self.set_command(CT_PAN_LEFT_START)
+    def clicked_command_fire(self):
+        print("Pressed CT_FIRE_START")
+        for _ in range(5):
+            self.set_command(CT_FIRE_START)
+        self.set_command(CT_FIRE_STOP)
 
     def keyPressEvent(self, event):
-        if (self.RcvStateCurr & ST_CALIB_ON) == ST_CALIB_ON :
-            key_map = {
-                Qt.Key_I: LT_INC_Y,
-                Qt.Key_L: LT_INC_X,
-                Qt.Key_J: LT_DEC_X,
-                Qt.Key_M: LT_DEC_Y,
-            }
-            # if self.RcvStateCurr == ST_CALIB_ON: 
-            if event.key() in key_map:
-                print(f"cal_key_send")
-                self.last_key_event = key_map[event.key()]
-                if not self.key_event_timer_calibration.isActive():
-                    self.process_calibration_key_event()
-                    self.key_event_timer_calibration.start()
-
-        else:
-            if isinstance(self.RcvStateCurr, bytes):
-                state_int = int.from_bytes(self.RcvStateCurr, byteorder='little') & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK
-            else:
-                state_int = self.RcvStateCurr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK
-
-            if state_int == ST_PREARMED:
-                key_map = {
-                    Qt.Key_I: CT_PAN_UP_START,
-                    # Qt.Key_Up: CT_PAN_UP_START,
-                    Qt.Key_L: CT_PAN_RIGHT_START,
-                    # Qt.Key_Right: CT_PAN_RIGHT_START,
-                    Qt.Key_J: CT_PAN_LEFT_START,
-                    # Qt.Key_Left: CT_PAN_LEFT_START,
-                    Qt.Key_M: CT_PAN_DOWN_START,
-                    # Qt.Key_Down: CT_PAN_DOWN_START,
-                }
-            elif state_int == ST_ARMED_MANUAL:
-                key_map = {
-                    Qt.Key_I: CT_PAN_UP_START,
-                    # Qt.Key_Up: CT_PAN_UP_START,
-                    Qt.Key_L: CT_PAN_RIGHT_START,
-                    # Qt.Key_Right: CT_PAN_RIGHT_START,
-                    Qt.Key_J: CT_PAN_LEFT_START,
-                    # Qt.Key_Left: CT_PAN_LEFT_START,
-                    Qt.Key_M: CT_PAN_DOWN_START,
-                    # Qt.Key_Down: CT_PAN_DOWN_START,
-                    Qt.Key_F: CT_FIRE_START,
-                    # Qt.Key_Return: CT_FIRE_START,
-                }
-            else:
-                key_map = {}
-                if event.key() in key_map:
-                    # self.set_command(key_map[event.key()])
-                    # self.CountSentCmdMsg += 1
-                    # print("Count Sent Command Key Event : ", self.CountSentCmdMsg)
-                    print(f"command_key_send")
-                    self.last_key_event = key_map[event.key()]
-                    if not self.key_event_timer_command.isActive():
-                        self.process_command_key_event()
-                        self.key_event_timer_command.start()
-
-    def keyReleaseEvent(self, event):
         if isinstance(self.RcvStateCurr, bytes):
-            state_int = int.from_bytes(self.RcvStateCurr, byteorder='little') & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK 
+            state_int = int.from_bytes(self.RcvStateCurr, byteorder='little') & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK
         else:
             state_int = self.RcvStateCurr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK
-            
-        if state_int == ST_ARMED_MANUAL:
-            key_map = {
-                Qt.Key_F: CT_FIRE_STOP,
-                # Qt.Key_Return: CT_FIRE_STOP
-            }
+
+        # elif state_int == ST_UNKNOWN:
+        if state_int == ST_PREARMED:
+            key_map = { Qt.Key_I: CT_PAN_UP_START, Qt.Key_L: CT_PAN_RIGHT_START, Qt.Key_J: CT_PAN_LEFT_START, Qt.Key_M: CT_PAN_DOWN_START }
+        elif state_int == ST_ARMED_MANUAL:
+            key_map = { Qt.Key_I: CT_PAN_UP_START, Qt.Key_L: CT_PAN_RIGHT_START, Qt.Key_J: CT_PAN_LEFT_START, Qt.Key_M: CT_PAN_DOWN_START, Qt.Key_F: CT_FIRE_START }
         else:
             key_map = {}
 
-        # if self.RcvStateCurr == ST_ARMED_MANUAL: 
         if event.key() in key_map:
-            # self.set_command(key_map[event.key()])
-            print(f"command_key_release")
-            self.last_key_event = key_map[event.key()]
-            if not self.key_event_timer_command.isActive():
-                self.process_command_key_event()
-                self.key_event_timer_command.start()
-    
-    def process_calibration_key_event(self):
-        if self.last_key_event is not None:
-            self.send_calib_to_server(self.last_key_event)
-            self.CountSentCalibMsg += 1
-            print("Count Sent Calibration Key Event : ", self.CountSentCalibMsg)
-            self.last_key_event = None
-
-    def process_command_key_event(self):
-        if self.last_key_event is not None:
-            self.set_command(self.last_key_event)
-            self.CountSentCmdMsg += 1
-            print("Count Sent Command Key Event : ", self.CountSentCmdMsg)
-            self.last_key_event = None
+            if event.key() == Qt.Key_F: # For Fire, Sending continuous 10 times fire msg
+                for _ in range(5):
+                    self.set_command(CT_FIRE_START)
+                self.set_command(CT_FIRE_STOP)
+            else: # For other registered keys                
+                self.set_command(key_map[event.key()])
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
