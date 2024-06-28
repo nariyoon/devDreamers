@@ -261,13 +261,15 @@ def buildTagetOrientation(msg):
                     print("sameCoordinateCnt: ", sameCoordinateCnt)
                     sameCoordinateCnt = 0
                     data = bytearray()
-                    data.extend(struct.pack('>II', 0, MT_FIRE))
+                    data.extend(struct.pack('>II', 1, MT_FIRE))
+                    data.append(255)
                     print("fire: ", data)
                     clientSock.sendall(data)
                     break
 
         data = bytearray()
-        data.extend(struct.pack('>II', 0, MT_COMPLETE))
+        data.extend(struct.pack('>II', 1, MT_COMPLETE))
+        data.append(255)
         print("complete: ", data)
         clientSock.sendall(data)
     else:
