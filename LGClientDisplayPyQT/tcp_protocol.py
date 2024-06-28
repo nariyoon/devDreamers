@@ -206,7 +206,7 @@ def buildTagetOrientation(msg):
                     sameCoordinateCnt = 0
                     print("move to target")
                     while detectCnt < 1:
-                        time.sleep(0.1)
+                        time.sleep(0.05)
                         data = bytearray()
                         targetCenterData = get_result_model()
                         for target in targetCenterData['target_info']:
