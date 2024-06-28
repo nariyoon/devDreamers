@@ -18,7 +18,7 @@ from queue import Queue
 from image_process_ui import ImageProcessingThread
 from image_process import init_image_processing_model
 import os
-# import qdarktheme
+# import qdarktheme // https://pypi.org/project/pyqtdarktheme/
 from image_process import get_result_model
 
 # O1 : 192.168.0.224
@@ -251,10 +251,16 @@ class DevWindow(QMainWindow):
 
         # direction buttons
         self.buttonUp.setIcon(QIcon('resources/arrow_up.png'))
+        self.buttonUp.setStyleSheet("border: none;")
+
         self.buttonDown.setIcon(QIcon('resources/arrow_down.png'))
+        self.buttonDown.setStyleSheet("border: none;")
         self.buttonRight.setIcon(QIcon('resources/arrow_right.png'))
+        self.buttonRight.setStyleSheet("border: none;")
         self.buttonLeft.setIcon(QIcon('resources/arrow_left.png'))
+        self.buttonLeft.setStyleSheet("border: none;")
         self.buttonFire.setIcon(QIcon('resources/exit.png'))
+        self.buttonFire.setStyleSheet("border: none;")
 
         self.stackedWidget.setCurrentIndex(0)
 
@@ -284,6 +290,8 @@ class DevWindow(QMainWindow):
         self.editIPAddress.setText(self.user_model.ip)
         self.editTCPPort.setText(self.user_model.port)
         self.initRecordLayeredViews()
+        self.setHitResult(True, 1)
+        self.setHitResult(False, 2)
     
     def initRecordLayeredViews(self):
         self.layeredQVBox = QVBoxLayout()
@@ -313,6 +321,12 @@ class DevWindow(QMainWindow):
         self.layeredQVBox.addWidget(self.fps)
 
         self.overlayWidget.setLayout(self.layeredQVBox)
+
+
+    def setHitResult(self, result, targetNumber): 
+        result = 'HIT!!' if result else 'MISS'
+        self.hitResult.setText(result)
+        self.hitResultHistory.append(f'{targetNumber}: {result}')
 
 
     def validCheckIpAndPort(self,text): 
@@ -380,7 +394,9 @@ class DevWindow(QMainWindow):
             self.send_target_order_to_server(char_array)
             self.log_message(f"Auto Engage State is Changed: {self.editEngageOrder}")
             print("Auto Engage State is Changed: ", {self.editEngageOrder})
-            self.send_state_change_request_to_server(ST_AUTO_ENGAGE)    
+            self.send_state_change_request_to_server(ST_AUTO_ENGAGE)   
+
+        self.setAllUIEnabled(True, True) 
 
         # if 'Auto Engage' == self.comboBoxSelectMode.currentText():
         #     self.current_mode = self.Mode.AUTO_ENGAGE
@@ -484,25 +500,35 @@ class DevWindow(QMainWindow):
             self.comboBoxSelectMode.setEnabled(False)
             self.editPreArmCode.setEnabled(True)
             self.buttonPreArmEnable.setText('Ready to Pre-Armed')
+            self.checkBoxLaserEnable.setEnabled(False)
+            self.buttonCalibrate.setEnabled(False)
         # elif self.currnet_state == self.State.PREARMED:
         elif self.RcvStateCurr == ST_PREARMED:
             self.comboBoxSelectMode.setEnabled(True)
             self.editPreArmCode.setEnabled(False)
             self.buttonPreArmEnable.setText('Relase Pre-Armed')
+            self.checkBoxLaserEnable.setEnabled(False)
+            self.buttonCalibrate.setEnabled(False)
         # elif self.currnet_state == self.State.ARMED_MANUAL:
         elif self.RcvStateCurr == ST_ARMED_MANUAL:
             self.comboBoxSelectMode.setEnabled(True)
             self.editPreArmCode.setEnabled(False)
             self.buttonPreArmEnable.setText('Relase Pre-Armed')
+            self.checkBoxLaserEnable.setEnabled(True)
+            self.buttonCalibrate.setEnabled(True)
         # elif self.currnet_state == self.State.AUTO_ENGAGE:
         elif self.RcvStateCurr == ST_AUTO_ENGAGE:
             self.comboBoxSelectMode.setEnabled(True)
             self.editPreArmCode.setEnabled(False)
             self.buttonPreArmEnable.setText('Relase Pre-Armed')
+            self.checkBoxLaserEnable.setEnabled(False)
+            self.buttonCalibrate.setEnabled(False)
         else:
             self.comboBoxSelectMode.setEnabled(False)
             self.editPreArmCode.setEnabled(True) 
             self.buttonPreArmEnable.setText('Ready to Pre-Armed')
+            self.checkBoxLaserEnable.setEnabled(False)
+            self.buttonCalibrate.setEnabled(False)
         # self.comboBoxChangeAlgorithm
 
     @pyqtSlot()
@@ -974,6 +1000,8 @@ class DevWindow(QMainWindow):
             except socket.error as e:
                 print(f"Failed to connect to {ip}:{port}, error: {e}")
                 return False
+            
+
 
     def keyPressEvent(self, event):
         if (self.RcvStateCurr & ST_CALIB_ON) == ST_CALIB_ON :
