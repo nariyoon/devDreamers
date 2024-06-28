@@ -86,6 +86,8 @@ def tcp_ip_thread(ip, port, shutdown_event):
         errorCode = ERR_FAIL_TO_CONNECT
         packedData = struct.pack(">IIB", 1, MT_ERROR, errorCode)
         sendMsgToUI(packedData) # ERR_FAIL_TO_CONNECT
+        clientSock.close()
+        print("Network Thread Exit")
         return
 
     errorCode = ERR_SUCCESS

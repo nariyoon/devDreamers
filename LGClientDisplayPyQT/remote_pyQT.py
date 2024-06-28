@@ -18,7 +18,11 @@ from queue import Queue
 from image_process_ui import ImageProcessingThread
 from image_process import init_image_processing_model
 import os
-import qdarktheme
+# import qdarktheme
+from image_process import get_result_model
+
+# O1 : 192.168.0.224
+# S3 : 192.168.0.238
 
 # from sip import qRegisterMetaType  # Import qRegisterMetaType from sip module
 
@@ -26,15 +30,15 @@ import qdarktheme
 # qRegisterMetaType(QTextCursor)
 
 # Define robotcontrolsw(RCV) state types
-ST_UNKNOWN      = 0x00
-ST_SAFE         = 0x01
-ST_PREARMED     = 0x02
-ST_ENGAGE_AUTO  = 0x04
-ST_ARMED_MANUAL = 0x08
-ST_ARMED        = 0x10
-ST_FIRING       = 0x20      
-ST_LASER_ON     = 0x40
-ST_CALIB_ON     = 0x80
+ST_UNKNOWN           = 0x00
+ST_SAFE              = 0x01
+ST_PREARMED          = 0x02
+ST_AUTO_ENGAGE       = 0x04
+ST_ARMED_MANUAL      = 0x08
+ST_ARMED             = 0x10
+ST_FIRING            = 0x20      
+ST_LASER_ON          = 0x40
+ST_CALIB_ON          = 0x80
 ST_CLEAR_LASER_MASK  = (~ST_LASER_ON)
 ST_CLEAR_FIRING_MASK = (~ST_FIRING)
 ST_CLEAR_ARMED_MASK  = (~ST_ARMED)
@@ -52,6 +56,8 @@ MT_STATE_CHANGE_REQ = 7
 MT_CALIB_COMMANDS = 8
 MT_TARGET_DIFF = 9
 MT_SOCKET = 10
+MT_COMPLETE = 11
+MT_FIRE = 12
 
 # Define command types
 CT_PAN_LEFT_START = 0x01
@@ -82,9 +88,9 @@ class DevWindow(QMainWindow):
     SocketState = SOCKET_CONNECTION_LOST
     
     # Model : RcsState
-    RcvState_Curr = ST_UNKNOWN
-    RcvState_Prev = ST_UNKNOWN
-    RcvState_Requested = ST_UNKNOWN
+    RcvStateCurr = ST_UNKNOWN
+    # RcvStatePrev = ST_UNKNOWN
+    # RcvStateRequested = ST_UNKNOWN
 
     # Model : Prev. RecvMsg (Received total msg stored including TMessageHeader)
     RecvMsg_Command = '0x0'
@@ -100,21 +106,22 @@ class DevWindow(QMainWindow):
     CountSentCmdMsg = 0
     CountSentCalibMsg = 0
 
-    # 기존코드 중복, 수석님 코드로 변경필요.
-    class State(Enum):
-        UNKNOWN = 0
-        CONNECTED = 1
-        SAFE = 2
-        PREARMED = 3
-        ARMED_MANUAL = 4
-        AUTO_ENGAGE = 5
+    # # 기존코드 중복, 수석님 코드로 변경필요.
+    # class State(Enum):
+    #     UNKNOWN = 0
+    #     CONNECTED = 1
+    #     SAFE = 2
+    #     PREARMED = 3
+    #     ARMED_MANUAL = 4
+    #     AUTO_ENGAGE = 5
 
-    currnet_state = State.UNKNOWN
+    # currnet_state = State.UNKNOWN
+    RcvStateCurr = ST_UNKNOWN
 
   	# Define Image thread to separate
     image_received = pyqtSignal(bytes)
     
-    # Add a signal to emit RcvState_Curr changes
+    # Add a signal to emit RcvStateCurr changes
     rcv_state_changed = pyqtSignal(int)
 
     # Define a signal to emit log messages
@@ -130,8 +137,6 @@ class DevWindow(QMainWindow):
         # self.threads = []  # 스레드 목록을 저장할 리스트
         # self.shutdown_events = []  # 각 스레드 종료를 위한 이벤트 목록
         # # self.thread_shutdown_events = {}  # 스레드 이름을 키로 하고 종료 이벤트를 값으로 하는 ARRAY
-
-      
 
 		# Event to signal the threads to shut down
         self.shutdown_event = threading.Event()        
@@ -151,6 +156,8 @@ class DevWindow(QMainWindow):
         
         # Connect the log signal to the log message slot
         self.log_signal.connect(self.append_log_message)
+        # Connect the signal to the slot
+        # self.comboBox.currentIndexChanged.connect(self.on_combobox_changed)
 
         # Connecting to Model : user_model is inserted from sub-directory config.ini file
         self.user_model = UserModel()
@@ -159,7 +166,7 @@ class DevWindow(QMainWindow):
         ui_file = 'new_remote.ui'
         ui_mainwindow = uic.loadUi(ui_file, self)
 
-        app.setStyleSheet(qdarktheme.load_stylesheet())
+        # app.setStyleSheet(qdarktheme.load_stylesheet())
         self.initUI()
 
         self.recv_callback = None
@@ -240,6 +247,7 @@ class DevWindow(QMainWindow):
         self.buttonPreArmEnable.clicked.connect(self.toggle_preArm)
         self.checkBoxLaserEnable.clicked.connect(self.toggle_laser)
         self.buttonCalibrate.clicked.connect(self.toggle_calibrate)
+        self.buttonStart.clicked.connect(self.autoengagestart)
 
         # direction buttons
         self.buttonUp.setIcon(QIcon('resources/arrow_up.png'))
@@ -263,13 +271,12 @@ class DevWindow(QMainWindow):
     # def set_send_command_callback(self, callback):
     #     self.send_command_callback = callback
 
-
     def get_img_model(self):
         if self.img_model_global and len(self.img_model_global) > 0:
-            # self.selected_model = self.img_model_global[0]
+            self.selected_model = self.img_model_global[0]  # Assign the first model in the list to selected_model
             return self.selected_model
         else:
-            # print("Model list is empty or not initialized.")
+            print("Model list is empty or not initialized.")
             return None
 
     def setInitialValue(self):
@@ -278,7 +285,6 @@ class DevWindow(QMainWindow):
         self.editTCPPort.setText(self.user_model.port)
         self.initRecordLayeredViews()
     
-
     def initRecordLayeredViews(self):
         self.layeredQVBox = QVBoxLayout()
 
@@ -344,7 +350,6 @@ class DevWindow(QMainWindow):
         pattern = r'^(?:[1-9]\d{0,3}|0)$'
         return bool(re.match(pattern, port))
     
-
     def check_ipv4(self,ip):
         ipv4_pattern = r'^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$'
         if re.match(ipv4_pattern, ip):
@@ -361,12 +366,21 @@ class DevWindow(QMainWindow):
         widgetIndex = 1 if index==2 else 0
         self.stackedWidget.setCurrentIndex(widgetIndex)
         if index == 0:
-            self.currnet_state = self.State.PREARMED
+            # self.currnet_state = self.State.PREARMED
+            self.RcvStateCurr = ST_PREARMED
+            self.send_state_change_request_to_server(ST_PREARMED) 
         elif index ==1:
-            self.currnet_state = self.State.ARMED_MANUAL
+            # self.currnet_state = self.State.ARMED_MANUAL
+            self.RcvStateCurr = ST_ARMED_MANUAL
+            self.send_state_change_request_to_server(ST_ARMED_MANUAL)    
         else:
-            self.currnet_state = self.State.AUTO_ENGAGE
-
+            # self.currnet_state = self.State.AUTO_ENGAGE
+            self.RcvStateCurr = ST_AUTO_ENGAGE
+            char_array = self.get_char_array_autoengage_from_text(self.editEngageOrder)
+            self.send_target_order_to_server(char_array)
+            self.log_message(f"Auto Engage State is Changed: {self.editEngageOrder}")
+            print("Auto Engage State is Changed: ", {self.editEngageOrder})
+            self.send_state_change_request_to_server(ST_AUTO_ENGAGE)    
 
         # if 'Auto Engage' == self.comboBoxSelectMode.currentText():
         #     self.current_mode = self.Mode.AUTO_ENGAGE
@@ -403,8 +417,6 @@ class DevWindow(QMainWindow):
             self.send_calib()
             self.buttonCalibrate.setText('ON')
 
-
-            
     def toggle_preArm(self):
         if self.buttonPreArmEnable.isChecked():
             self.pre_arm_enable()
@@ -430,7 +442,8 @@ class DevWindow(QMainWindow):
         self.log_message("Connecting.....")
         
         self.user_model.save_to_config(ip, port)
-        self.currnet_state = self.State.SAFE
+        # self.currnet_state = self.State.SAFE
+        self.RcvStateCurr = ST_SAFE
         self.setAllUIEnabled(True, False)
 
     def reconnect(self):
@@ -466,19 +479,23 @@ class DevWindow(QMainWindow):
   
     def updateModeUI(self):
 
-        if self.currnet_state == self.State.SAFE:
+        if self.RcvStateCurr == ST_SAFE:
+        # if self.currnet_state == self.State.SAFE:
             self.comboBoxSelectMode.setEnabled(False)
             self.editPreArmCode.setEnabled(True)
             self.buttonPreArmEnable.setText('Ready to Pre-Armed')
-        elif self.currnet_state == self.State.PREARMED:
+        # elif self.currnet_state == self.State.PREARMED:
+        elif self.RcvStateCurr == ST_PREARMED:
             self.comboBoxSelectMode.setEnabled(True)
             self.editPreArmCode.setEnabled(False)
             self.buttonPreArmEnable.setText('Relase Pre-Armed')
-        elif self.currnet_state == self.State.ARMED_MANUAL:
+        # elif self.currnet_state == self.State.ARMED_MANUAL:
+        elif self.RcvStateCurr == ST_ARMED_MANUAL:
             self.comboBoxSelectMode.setEnabled(True)
             self.editPreArmCode.setEnabled(False)
             self.buttonPreArmEnable.setText('Relase Pre-Armed')
-        elif self.currnet_state == self.State.AUTO_ENGAGE:
+        # elif self.currnet_state == self.State.AUTO_ENGAGE:
+        elif self.RcvStateCurr == ST_AUTO_ENGAGE:
             self.comboBoxSelectMode.setEnabled(True)
             self.editPreArmCode.setEnabled(False)
             self.buttonPreArmEnable.setText('Relase Pre-Armed')
@@ -498,7 +515,9 @@ class DevWindow(QMainWindow):
             self.tcp_thread.join()
         
         self.log_message("Disconnected")
-        self.currnet_state = self.State.UNKNOWN
+        # self.currnet_state = self.State.UNKNOWN
+        # self.currnet_state = self.State.UNKNOWN
+        self.RcvStateCurr = ST_UNKNOWN
         self.setAllUIEnabled(False, False)
         self.shutdown_event.clear()
 
@@ -507,10 +526,10 @@ class DevWindow(QMainWindow):
         self.log_message("Pre-Arm Enable clicked")
         # self.send_state_change_request_to_server(ST_SAFE)
 
-        if isinstance(self.RcvState_Curr, bytes):
-            state_int = int.from_bytes(self.RcvState_Curr, byteorder='little')
+        if isinstance(self.RcvStateCurr, bytes):
+            state_int = int.from_bytes(self.RcvStateCurr, byteorder='little')
         else:
-            state_int = self.RcvState_Curr
+            state_int = self.RcvStateCurr
 
         print("Current State : ", (state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK), " ")
 
@@ -522,10 +541,10 @@ class DevWindow(QMainWindow):
         self.send_pre_arm_code_to_server(char_array)
         
         # Update Current State 
-        self.RcvState_Curr = ST_PREARMED
-        self.RcvState_Requested = ST_PREARMED
+        self.RcvStateCurr = ST_PREARMED
+        # self.RcvStateRequested = ST_PREARMED
+        # self.currnet_state = self.State.PREARMED
         self.updateSystemState()
-        self.currnet_state = self.State.PREARMED
         self.setAllUIEnabled(True, True)
 
     @pyqtSlot()
@@ -547,10 +566,10 @@ class DevWindow(QMainWindow):
         self.log_message(f"Laser Enabled: {self.checkBoxLaserEnable.isChecked()}")
         print("Laser Enabled: ", {self.checkBoxLaserEnable.isChecked()})
 
-        if isinstance(self.RcvState_Curr, bytes):
-            state_int = int.from_bytes(self.RcvState_Curr, byteorder='little')
+        if isinstance(self.RcvStateCurr, bytes):
+            state_int = int.from_bytes(self.RcvStateCurr, byteorder='little')
         else:
-            state_int = self.RcvState_Curr
+            state_int = self.RcvStateCurr
 
         if (self.checkBoxLaserEnable.isChecked() == True):
             # state_int should be 72
@@ -569,10 +588,10 @@ class DevWindow(QMainWindow):
         self.log_message(f"Calibration Enabled: {self.buttonCalibrate.isChecked()}")
         print("Calibration Enabled: ", {self.buttonCalibrate.isChecked()})
 
-        if isinstance(self.RcvState_Curr, bytes):
-            state_int = int.from_bytes(self.RcvState_Curr, byteorder='little')
+        if isinstance(self.RcvStateCurr, bytes):
+            state_int = int.from_bytes(self.RcvStateCurr, byteorder='little')
         else:
-            state_int = self.RcvState_Curr
+            state_int = self.RcvStateCurr
 
         if(self.buttonCalibrate.isChecked() == True):
             if (state_int & ST_ARMED_MANUAL) == ST_ARMED_MANUAL:
@@ -582,12 +601,19 @@ class DevWindow(QMainWindow):
             self.send_state_change_request_to_server(state_int)
         else:
             # send calibration complete message to robot
-            self.send_calib_to_server(self, LT_CAL_COMPLETE)
+            self.send_calib_to_server(LT_CAL_COMPLETE)
 
             # state_int should be 8
             state_int &= ST_CLEAR_CALIB_MASK
             self.send_state_change_request_to_server(state_int)
                     
+    def autoengagestart(self):
+        char_array = self.get_char_array_autoengage_from_text(self.editEngageOrder)
+        self.send_target_order_to_server(char_array)
+        print("Auto Engage Fire Started: ", {self.editEngageOrder})
+        self.set_command(CT_FIRE_START)
+        # self.send_state_change_request_to_server(ST_AUTO_ENGAGE)
+
     @pyqtSlot()
     def toggle_auto_engage(self):
         autoEngage = self.comboBoxSelectMode.setCurrentIndex()==1
@@ -598,10 +624,12 @@ class DevWindow(QMainWindow):
 
             if not engageOrder:
                 self.log_message(f"Please enter engageOrders")
+                print("Auto Engage Enabled: ", {autoEngage})
             else:
                 char_array = self.get_char_array_autoengage_from_text(self.editEngageOrder)
                 self.send_target_order_to_server(char_array)
-                self.send_state_change_request_to_server(ST_ENGAGE_AUTO)
+                print("Auto Engage Enabled: ", {self.editEngageOrder})
+                self.send_state_change_request_to_server(ST_AUTO_ENGAGE)
         else:
             self.send_state_change_request_to_server(ST_PREARMED)  
 
@@ -745,12 +773,12 @@ class DevWindow(QMainWindow):
     ########################################################################
     # Update Current System State
     def updateSystemState(self):
-        # self.log_message("Called updateSystemState Function!!_", self.RcvState_Curr)
+        # self.log_message("Called updateSystemState Function!!_", self.RcvStateCurr)
         self.log_message("Called updateSystemState Function!!_")
-        if isinstance(self.RcvState_Curr, bytes):
-            state_int = int.from_bytes(self.RcvState_Curr, byteorder='little')
+        if isinstance(self.RcvStateCurr, bytes):
+            state_int = int.from_bytes(self.RcvStateCurr, byteorder='little')
         else:
-            state_int = self.RcvState_Curr
+            state_int = self.RcvStateCurr
 
         if (state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_UNKNOWN:
             self.labelState.setText("UNKNOWN")
@@ -761,11 +789,11 @@ class DevWindow(QMainWindow):
         elif (state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_PREARMED:
             self.labelState.setText("PREARMED")
             self.log_message(f"MT_STATE : PREARMED_{state_int}")
-        elif (state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_ENGAGE_AUTO:
-            self.labelState.setText("ENGAGE_AUTO")
-            self.log_message(f"MT_STATE : ENGAGE_AUTO_{state_int}")
+        elif (state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_AUTO_ENGAGE:
+            self.labelState.setText("AUTO_ENGAGE")
+            self.log_message(f"MT_STATE : AUTO_ENGAGE_{state_int}")
         elif (state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_ARMED_MANUAL:
-            self.labelState.setText("ARMED_MANUAL") 
+            self.labelState.setText("ARMED_MANUAL")
             self.log_message(f"MT_STATE : ARMED_MANUAL_{state_int}")
         elif (state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_ARMED:
             self.labelState.setText("ARMED") 
@@ -883,12 +911,12 @@ class DevWindow(QMainWindow):
             # print test
             print("MT_STATE Received :", ' '.join(f'0x{byte:02x}' for byte in message))
             rcv_state = struct.unpack(">III", message)[2]
-            self.RcvState_Curr = rcv_state
-            # print("MT_STATE Received as", self.RcvState_Curr, " ", rcv_state)
+            self.RcvStateCurr = rcv_state
+            # print("MT_STATE Received as", self.RcvStateCurr, " ", rcv_state)
             self.updateSystemState()
 
-            if self.RcvState_Curr != self.RcvState_Prev:
-                self.RcvState_Prev = self.RcvState_Curr
+            # if self.RcvStateCurr != self.RcvStatePrev:
+            #     self.RcvStatePrev = self.RcvStateCurr
             
         # 나머지 MT_MSG 들은 byte 배열이 들어오므로 bit -> little 변환이 필요함, 송신도 마찬가지
         elif type_msg == MT_TEXT:
@@ -911,7 +939,7 @@ class DevWindow(QMainWindow):
             socket_state = struct.unpack(">IIB", message)[2]
             socket_state = int(socket_state)
             # self.SocketState = socket_state
-            # print("MT_STATE Received as", self.RcvState_Curr, " ", rcv_state)
+            # print("MT_STATE Received as", self.RcvStateCurr, " ", rcv_state)
             print("Socket State Received", socket_state)
             self.updateSocketState(socket_state)
         else:
@@ -948,14 +976,14 @@ class DevWindow(QMainWindow):
                 return False
 
     def keyPressEvent(self, event):
-        if (self.RcvState_Curr & ST_CALIB_ON) == ST_CALIB_ON :
+        if (self.RcvStateCurr & ST_CALIB_ON) == ST_CALIB_ON :
             key_map = {
                 Qt.Key_I: LT_INC_Y,
                 Qt.Key_L: LT_INC_X,
                 Qt.Key_J: LT_DEC_X,
                 Qt.Key_M: LT_DEC_Y,
             }
-            # if self.RcvState_Curr == ST_CALIB_ON: 
+            # if self.RcvStateCurr == ST_CALIB_ON: 
             if event.key() in key_map:
                 print(f"cal_key_send")
                 self.last_key_event = key_map[event.key()]
@@ -964,10 +992,10 @@ class DevWindow(QMainWindow):
                     self.key_event_timer_calibration.start()
 
         else:
-            if isinstance(self.RcvState_Curr, bytes):
-                state_int = int.from_bytes(self.RcvState_Curr, byteorder='little') & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK
+            if isinstance(self.RcvStateCurr, bytes):
+                state_int = int.from_bytes(self.RcvStateCurr, byteorder='little') & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK
             else:
-                state_int = self.RcvState_Curr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK
+                state_int = self.RcvStateCurr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK
 
             if state_int == ST_PREARMED:
                 key_map = {
@@ -1006,10 +1034,10 @@ class DevWindow(QMainWindow):
                         self.key_event_timer_command.start()
 
     def keyReleaseEvent(self, event):
-        if isinstance(self.RcvState_Curr, bytes):
-            state_int = int.from_bytes(self.RcvState_Curr, byteorder='little') & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK 
+        if isinstance(self.RcvStateCurr, bytes):
+            state_int = int.from_bytes(self.RcvStateCurr, byteorder='little') & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK 
         else:
-            state_int = self.RcvState_Curr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK
+            state_int = self.RcvStateCurr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK
             
         if state_int == ST_ARMED_MANUAL:
             key_map = {
@@ -1019,7 +1047,7 @@ class DevWindow(QMainWindow):
         else:
             key_map = {}
 
-        # if self.RcvState_Curr == ST_ARMED_MANUAL: 
+        # if self.RcvStateCurr == ST_ARMED_MANUAL: 
         if event.key() in key_map:
             # self.set_command(key_map[event.key()])
             print(f"command_key_release")
