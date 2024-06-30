@@ -4,7 +4,6 @@ import threading
 import time
 import cv2
 import struct
-from queue import Queue, Full
 from image_algo.yolov8_algo import YOLO_Detector
 from image_algo.tflite_algo import ObjectDetector
 from image_algo.opencv_algo import *
@@ -15,7 +14,8 @@ from datetime import datetime
 from filterpy.kalman import KalmanFilter
 import copy
 import torch
-from queue import Empty
+
+from cannon_queue import *
 
 # Add the parent directory of `image_algo` to sys.path
 script_dir = os.path.dirname(os.path.realpath(__file__))
@@ -127,7 +127,7 @@ def init_image_processing_model():
     image = cv2.resize(image, (CAP_PROP_FRAME_WIDTH, CAP_PROP_FRAME_HEIGHT))
 
     # YOLOv8 model
-    yolo_model_path = f"{script_dir}/image_algo/models/best_1.pt"
+    yolo_model_path = f"{script_dir}/image_algo/models/best_17.pt"
     yolo_model = YOLOAlgorithm(yolo_model_path)
     yolo_model.detector.model.to(torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
     yolo_model.detect(image)
@@ -266,19 +266,36 @@ def image_processing_thread(QUEUE, shutdown_event, form_instance):
                 target_info.append({
                     "label": label,
                     "center": [center_x, center_y],
+                    "bbox": [x1, y1, x2, y2],
                     "size": [width, height]
                 })
 
                 box_info.append({
                     "label": label,
-                    "bbox": [x1, y1, x2, y2]
+                    "bbox": [x1, y1, x2, y2],
+                    "center": [center_x, center_y],
                 })
+
+                # # 박스와 라벨을 이미지에 그림
+                # cv2.rectangle(imageMat, (x1, y1), (x2, y2), (255, 0, 0), 2)
+                # cv2.putText(imageMat, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+
 
             # DATA 딕셔너리에 업데이트
             DATA['target_info'] = target_info
-            DATA['box_info'] = box_info
+            # DATA['box_info'] = box_info
+
+
+            # target_queue.put(target_info)
+            box_queue.put(box_info)
+            # target_queue.put(target_info)
             set_result_model(DATA)
+
             # cv2.imshow('Detection and Classification Result', imageMat)
+
+            # key = cv2.waitKey(1) & 0xFF
+            # if key == ord('q'):  # Quit without saving
+            #     cv2.destroyWindow('Manual Labeling')
         except Empty:
             continue
         # process_frame(frame)
