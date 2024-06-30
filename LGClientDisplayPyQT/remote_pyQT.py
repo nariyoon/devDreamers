@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QCheckBox, Q
 from PyQt5.QtGui import QPixmap, QIntValidator, QIcon, QMovie
 from PyQt5.QtCore import pyqtSignal, pyqtSlot, Qt, QTimer, QMetaObject, Q_ARG # , qRegisterMetaType
 from usermodel.usermodel import UserModel
-from tcp_protocol import sendMsgToCannon, set_uimsg_update_callback
+from tcp_protocol import sendMsgToCannon, set_uimsg_update_callback, getFps
 from common import common_start
 from PyQt5 import uic
 from queue import Queue
@@ -111,10 +111,9 @@ class DevWindow(QMainWindow):
     RcvStateCurr = ST_UNKNOWN
 
   	# Define Image thread to separate
-    image_received = pyqtSignal(bytes)
-    
-    # Add a signal to emit RcvStateCurr changes
-    rcv_state_changed = pyqtSignal(int)
+    image_received = pyqtSignal(bytes) # Sending image bytes
+    rcv_state_changed = pyqtSignal(int) # Add a signal to emit RcvStateCurr changes
+    model_changed = pyqtSignal(int) # Sending selected model integer value to image_ui
 
     # Define a signal to emit log messages
     log_signal = pyqtSignal(str)
@@ -147,6 +146,7 @@ class DevWindow(QMainWindow):
         # Connect the signal to the slot in the thread
         self.rcv_state_changed.connect(self.image_processing_thread.update_rcv_state)
         self.image_received.connect(self.image_processing_thread.update_image_data)
+        self.model_changed.connect(self.image_processing_thread.update_selected_model)
         
         # Connect the log signal to the log message slot
         self.log_signal.connect(self.append_log_message)
@@ -263,6 +263,7 @@ class DevWindow(QMainWindow):
     def get_img_model(self):
         if self.img_model_global and len(self.img_model_global) > 0:
             self.selected_model = self.img_model_global[0]  # Assign the first model in the list to selected_model
+            self.model_changed.emit(self.selected_model)
             return self.selected_model
         else:
             print("Model list is empty or not initialized.")
@@ -300,7 +301,7 @@ class DevWindow(QMainWindow):
         self.layeredQVBox.addWidget(self.pictureBox)
 
         # fps 
-        self.fps = QLabel("FPSFPSFPS", self)
+        self.fps = QLabel("Average FPS : N/A", self)
         self.layeredQVBox.addWidget(self.fps)
 
         self.overlayWidget.setLayout(self.layeredQVBox)
@@ -358,7 +359,7 @@ class DevWindow(QMainWindow):
         self.pictureBox.setPixmap(pixmap)
         self.pictureBox.setScaledContents(True)
 		
-    @pyqtSlot()        
+    @pyqtSlot(int)        
     def on_combobox_changed_mode(self, index):
         widgetIndex = 1 if index==2 else 0
         self.stackedWidget.setCurrentIndex(widgetIndex)
@@ -408,14 +409,24 @@ class DevWindow(QMainWindow):
         #     self.log_message(f"Auto Engage Fire Stopping: {self.editEngageOrder}")
         #     self.set_command(CT_FIRE_STOP)  # AUTO ENGAGE 시작 상태로 전환하는 함수
 
+    # def on_combobox_changed_algorithm(self, index):
+    #     # Your code here to handle the index change
+    #     if 0 <= index < len(self.img_model_global):
+    #         self.selected_model = self.img_model_global[index]
+    #         print(f"on_combobox_changed_algorithm... SELECTED: {self.img_model_global[index].get_name()}")
+    #     else:
+    #         print("Invalid index or model list is empty")
+    #         self.selected_model = None
 
-
-
-    @pyqtSlot()
+    @pyqtSlot(int)
     def on_combobox_changed_algorithm(self, index):
+        print("Valid Call?")
+
         if 0 <= index < len(self.img_model_global):
             self.selected_model = self.img_model_global[index]
-            print(f"on_combobox_changed_algorithm... SELECTED: {self.img_model_global[index].get_name()}")
+            self.model_changed.emit(self.selected_model)
+            print(f"Model selected: {self.img_model_global[index].get_name()}")
+            # print(f"on_combobox_changed_algorithm... SELECTED: {self.img_model_global[index].get_name()}")
         else:
             print("Invalid index or model list is empty")
             self.selected_model = None
@@ -869,6 +880,8 @@ class DevWindow(QMainWindow):
             image_data = message[8:8 + len_msg]
 
             self.image_received.emit(image_data)
+            # Show average FPS to Label
+            getFps()
 
         # 나머지 MT_MSG 들은 byte 배열이 들어오므로 bit -> little 변환이 필요함, 송신도 마찬가지
         elif type_msg == MT_STATE:
