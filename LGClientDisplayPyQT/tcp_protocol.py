@@ -10,6 +10,7 @@ import os
 from queue import LifoQueue
 import threading
 import time
+import queue
 
 # Define message types
 MT_COMMANDS = 1
@@ -81,13 +82,15 @@ def tcp_ip_thread(ip, port, shutdown_event):
 
     try:
         clientSock.connect(serverAddress)
+        clientSock.settimeout(1.0)  # 1초 후에 타임아웃
     except socket.error as e:
         print("Failed to connect to server:", e)
         errorCode = ERR_FAIL_TO_CONNECT
         packedData = struct.pack(">IIB", 1, MT_ERROR, errorCode)
         sendMsgToUI(packedData) # ERR_FAIL_TO_CONNECT
         clientSock.close()
-        print("Network Thread Exit")
+        print("Network Thread Exit because of connection failure")
+        shutdown_event.set()  # Notify all threads to shut down
         return
 
     errorCode = ERR_SUCCESS
@@ -102,12 +105,15 @@ def tcp_ip_thread(ip, port, shutdown_event):
         try:
             # Receive the message header
             headerData = clientSock.recv(8)
-            if len(headerData) != struct.calcsize('II'):
+            if headerData[0] == 0x68 and headerData[1] == 0x65:
+                continue
+            elif len(headerData) != struct.calcsize('II'):
                 print("Connection lost.")
-                print("lost message header ", ' '.join(f'0x{byte:02x}' for byte in headerData))
-                packedData = struct.pack(">IIB", 1, MT_ERROR, ERR_CONNECTION_LOST)
-                sendMsgToUI(packedData)
-                break
+                raise ConnectionError("Connection lost.")
+                # print("lost message header ", ' '.join(f'0x{byte:02x}' for byte in headerData))
+                # packedData = struct.pack(">IIB", 1, MT_ERROR, ERR_CONNECTION_LOST)
+                # sendMsgToUI(packedData)
+                # return
 
             # Unpack the message header
             len_, type_ = struct.unpack('II', headerData)
@@ -165,16 +171,29 @@ def tcp_ip_thread(ip, port, shutdown_event):
             else:
                 #print("len_ ", len_, "header type_ ", type_, "data_", int.from_bytes(buffer, byteorder='big'))
                 sendMsgToUI(packedData)
-
+        except socket.timeout:
+            continue  # For non-blocking mode when using recv(), we set timeout thus continuing recv()
         except socket.error as e:
-            print("Connection lost:", str(e))
+            print(f"Network error occurred: {e}")
             packedData = struct.pack(">IIB", 1, MT_ERROR, ERR_CONNECTION_LOST)
             sendMsgToUI(packedData)
-            break
-        pass
+            # clientSock.close()
+            shutdown_event.set()  # Ensure all threads are notified to stop
+            print("Network Thread Exit")
+        # finally:
+        #     clientSock.close()
+        #     shutdown_event.set()  # Ensure all threads are notified to stop
+        #     print("Network Thread Exit")
+
+        # except socket.error as e:
+        #     print("Connection lost:", str(e))
+        #     packedData = struct.pack(">IIB", 1, MT_ERROR, ERR_CONNECTION_LOST)
+        #     sendMsgToUI(packedData)
+        #     break
+        # pass
 
     clientSock.close()
-    print("Network Thread Exit")
+    print("tcp_ip_thread Thread is closed successfully.")
 
 def buildTagetOrientation(msg):
     print("target sequence: ", msg)
@@ -298,10 +317,13 @@ def sendMsgToUI(msg):
 def buildTargetOrientationThread(shutdown_event):
     while not shutdown_event.is_set():
         try:
-            msg = task_queue.get()
+            msg = task_queue.get(timeout=1)  # 1초 동안 대기
             buildTagetOrientation(msg)
+        except queue.Empty:
+            continue
         except task_queue.empty():
             continue
+    print("BuildTargetOrientationThread is closed successfully.")
 
 def send_float(number):
     # change float to int by 4byte network order

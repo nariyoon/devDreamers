@@ -151,8 +151,14 @@ class DevWindow(QMainWindow):
         self.user_model = UserModel()
         print(self.user_model)
 		
-        ui_file = 'new_remote.ui'
-        ui_mainwindow = uic.loadUi(ui_file, self)
+        # Current file path of script of remote.ui file
+        # ui_file = 'new_remote.ui'
+        # ui_mainwindow = uic.loadUi(ui_file, self)
+        script_dir = os.path.dirname(os.path.realpath(__file__))
+        ui_file_path = os.path.join(script_dir, 'new_remote.ui')
+
+        # Load ui of remote.ui
+        ui_mainwindow = uic.loadUi(ui_file_path, self)
 
         app.setStyleSheet(qdarktheme.load_stylesheet())
         self.initUI()
@@ -164,9 +170,6 @@ class DevWindow(QMainWindow):
         # # Socket related 타이머 설정
         self.HeartbeatTimer = QTimer(self)
         self.HeartbeatTimer.timeout.connect(self.HeartBeatTimer_event)
-        # self.HeartbeatTimer = QTimer(self)
-        # self.HeartbeatTimer.timeout.connect(self.HeartBeatTimer_event)
-        # self.HeartbeatTimer.start(1000)  # 1000 밀리초 = 1초
         # Connect signal and slot for HeartTimer
         self.startHeartbeat.connect(self.HeartbeatTimer.start)
         self.stopHeartbeat.connect(self.HeartbeatTimer.stop)
@@ -523,11 +526,16 @@ class DevWindow(QMainWindow):
     def disconnect(self):
         # self.log_message("Disconnected")
 
+        # Terminate tcp_thread if it has been created
         if hasattr(self, 'tcp_thread') and self.tcp_thread.is_alive():
-            # self.frame_queue.put(None)  # Signal the thread to stop
-            self.shutdown_event.set()       # Signal the thread to stop
-            self.tcp_thread.join()
+            print("TCP thread is tried to be closed...")
+            self.shutdown_event.set()
+            self.tcp_thread.join()  
+            print("TCP thread is closed successfully.")
+        else:
+            print("TCP thread was not active or not created.")
         
+        print("All threads are closed successfully.")
         self.log_message("Disconnected")
         # self.currnet_state = self.State.UNKNOWN
         # self.currnet_state = self.State.UNKNOWN
@@ -798,6 +806,8 @@ class DevWindow(QMainWindow):
         # Emit the signal with the new state
         self.rcv_state_changed.emit(state_int)
 
+    ########################################################################
+    # Update Socket State due to transaction for SUCCESS, FAIL_TO_CONNECT, CONN_LOST
     def updateSocketState(self, socketstate):
         if socketstate == SOCKET_SUCCESS:
             self.SocketState = SOCKET_SUCCESS
@@ -815,13 +825,14 @@ class DevWindow(QMainWindow):
         elif socketstate == SOCKET_CONNECTION_LOST:
             self.SocketState = SOCKET_CONNECTION_LOST
             self.setAllUIEnabled(False, False)
+            self.disconnect()
             # self.buttonConnect.setEnabled(True)
             # self.buttonDisconnect.setEnabled(False)
             self.log_message("Robot's connection is lost - Starting retry to connect....")
-            # # self.HeartBeatTimer_event()
-            # if not self.HeartbeatTimer.isActive():
-            #     # self.HeartbeatTimer.start(10000)
-            #     self.startHeartbeat.emit(10000)  # HeartbeatTimer starts
+            # self.HeartBeatTimer_event()
+            if not self.HeartbeatTimer.isActive():
+                # self.HeartbeatTimer.start(10000)
+                self.startHeartbeat.emit(10000)  # HeartbeatTimer starts
 
     ###################################################################
     # Image presentation showing thread close
@@ -835,13 +846,14 @@ class DevWindow(QMainWindow):
         if hasattr(self, 'tcp_thread') and self.tcp_thread.is_alive():
             print("TCP thread is tried to be closed...")
             self.shutdown_event.set()
-            self.tcp_thread.join(timeout=5)  # 최대 5초 대기
+            # self.tcp_thread.join(timeout=5)  # 최대 5초 대기
+            self.tcp_thread.join()  # 최대 5초 대기
             print("TCP thread is closed successfully.")
         else:
             print("TCP thread was not active or not created.")
         
         print("All threads are closed successfully.")
-        super().closeEvent(event)  # 기본 종료 이벤트 수행
+        # super().closeEvent(event)  # 기본 종료 이벤트 수행
 
     ###################################################################
     # callback_msg 처리할때 MT 메시지 종류에 따라 차등 처리 기능 구현
@@ -911,17 +923,16 @@ class DevWindow(QMainWindow):
     # Using heartbeat timer, in order to detect the robot control sw to set abnormal state
     def HeartBeatTimer_event(self):
         self.log_message("Attempting to reconnect...")
-        # # if self.check_server(self.editIPAddress.text(), self.editTCPPort.text()):
-        # ip = self.editIPAddress.text()
-        # port = int(self.editTCPPort.text())
-        # if self.check_server(ip, port):
-        #     print("Server is up! Stopping the timer.")
-        #     self.HeartbeatTimer.stop()
-        #     # Theads.settimeout(5)  # 5 seconds timeout
-        #     self.reconnect()
-        # else:
-        #     print("Server check failed, will retry in 10 seconds.")
-        # self.connect()
+        # if self.check_server(self.editIPAddress.text(), self.editTCPPort.text()):
+        ip = self.editIPAddress.text()
+        port = int(self.editTCPPort.text())
+        if self.check_server(ip, port):
+            print("Server is up! Stopping the timer.")
+            self.HeartbeatTimer.stop()
+            # Theads.settimeout(5)  # 5 seconds timeout
+            self.connect()
+        else:
+            print("Server check failed, will retry in 10 seconds.")
 
     def check_server(self, ip, port):
         # Simple TCP socket to check the server
@@ -937,22 +948,47 @@ class DevWindow(QMainWindow):
                 return False
 
     def clicked_command_up(self):
-        print("Pressed CT_PAN_UP_START")
-        self.set_command(CT_PAN_UP_START)
+        if (self.is_client_connected() and 
+            ((self.RcvStateCurr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) in (ST_ARMED_MANUAL, ST_PREARMED))):
+            print("Pressed CT_TILTE_UP_START")
+            self.set_command(CT_PAN_UP_START)
+        else:
+            print("Blocking to press CT_TILTE_UP_START")
+            self.log_message(f"Blocking to press : CT_TILTE_UP_START")
     def clicked_command_down(self):
-        print("Pressed CT_PAN_DOWN_START")
-        self.set_command(CT_PAN_DOWN_START)
+        if (self.is_client_connected() and 
+            ((self.RcvStateCurr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) in (ST_ARMED_MANUAL, ST_PREARMED))):
+            print("Pressed CT_TILTE_DOWN_START")
+            self.set_command(CT_PAN_DOWN_START)
+        else:
+            print("Blocking to press CT_TILTE_DOWN_START")
+            self.log_message(f"Blocking to press : CT_TILTE_DOWN_START")
     def clicked_command_right(self):
-        print("Pressed CT_PAN_RIGHT_START")
-        self.set_command(CT_PAN_RIGHT_START)
+        if (self.is_client_connected() and 
+            ((self.RcvStateCurr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) in (ST_ARMED_MANUAL, ST_PREARMED))):
+            print("Pressed CT_PAN_RIGHT_START")
+            self.set_command(CT_PAN_RIGHT_START)
+        else:
+            print("Blocking to press CT_PAN_UP_START")
+            self.log_message(f"Blocking to press : CT_PAN_UP_START")
     def clicked_command_left(self):
-        print("Pressed CT_PAN_LEFT_START")
-        self.set_command(CT_PAN_LEFT_START)
+        if (self.is_client_connected() and 
+            ((self.RcvStateCurr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) in (ST_ARMED_MANUAL, ST_PREARMED))):
+            print("Pressed CT_PAN_LEFT_START")
+            self.set_command(CT_PAN_LEFT_START)
+        else:
+            print("Blocking to press CT_PAN_LEFT_START")
+            self.log_message(f"Blocking to press : CT_PAN_LEFT_START")
     def clicked_command_fire(self):
-        print("Pressed CT_FIRE_START")
-        for _ in range(5):
-            self.set_command(CT_FIRE_START)
-        self.set_command(CT_FIRE_STOP)
+        if (self.is_client_connected() and 
+            (self.RcvStateCurr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK == ST_ARMED_MANUAL)):
+            print("Pressed CT_FIRE_START")
+            for _ in range(5):
+                self.set_command(CT_FIRE_START)
+            self.set_command(CT_FIRE_STOP)
+        else:
+            print("Blocking to press CT_FIRE")
+            self.log_message(f"Blocking to press : CT_FIRE")
 
     def keyPressEvent(self, event):
         if isinstance(self.RcvStateCurr, bytes):

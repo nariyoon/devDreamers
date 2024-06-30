@@ -15,6 +15,7 @@ from datetime import datetime
 from filterpy.kalman import KalmanFilter
 import copy
 import torch
+from queue import Empty
 
 # Add the parent directory of `image_algo` to sys.path
 script_dir = os.path.dirname(os.path.realpath(__file__))
@@ -205,115 +206,84 @@ def init_model_image(frame):
     packedData = struct.pack(f'>II{len(buffer_bytes)}s', len(buffer_bytes), 3, buffer_bytes)
     return packedData
 
+def flush_queue(q):
+    while not q.empty():
+        try:
+            item = q.get_nowait()  # 아이템을 즉시 꺼냄
+        except:
+            break  # 큐가 비어있으면 반복 종료 Queue.empty()
 
 def image_processing_thread(QUEUE, shutdown_event, form_instance):
     DATA = {}
     debug_folder = "debug"
     os.makedirs(debug_folder, exist_ok=True)
 
-    # while True:
-    while not shutdown_event.is_set():
-        if not QUEUE.empty():
-            frame = QUEUE.get()
-            if frame is None:
-                break
+    try:
+        while not shutdown_event.is_set():
+            try:
+                frame = QUEUE.get(timeout=1)
+                if frame is None:  # 종료 신호로 None 사용 가능
+                    break
+                # if not QUEUE.empty():
+                imageMat = cv2.imdecode(np.frombuffer(frame, dtype=np.uint8), cv2.IMREAD_COLOR)
+                # h, w, _ = imageMat.shape
+                # print(f"width {w}, height {h}")
 
-            imageMat = cv2.imdecode(np.frombuffer(frame, dtype=np.uint8), cv2.IMREAD_COLOR)
-            # h, w, _ = imageMat.shape
-            # print(f"width {w}, height {h}")
+                # img_model_global 값을 가져오는 예제
+                # img_model = form_instance.get_img_model()
+                # if img_model is not None:
+                #     # print("Model is initialized and ready to use.")
+                #     results = img_model.predict(imageMat, imgsz=[960, 544], verbose=False)
+                # else:
+                #     # print("Model is not initialized yet.")
+                #     continue
 
-            # img_model_global 값을 가져오는 예제
-            # img_model = form_instance.get_img_model()
-            # if img_model is not None:
-            #     # print("Model is initialized and ready to use.")
-            #     results = img_model.predict(imageMat, imgsz=[960, 544], verbose=False)
-            # else:
-            #     # print("Model is not initialized yet.")
-            #     continue
-
-            models = form_instance.get_img_model()
-            if models is None:
-                continue
-
-            target_info = []
-            box_info = []
-
-            results = models.detect(imageMat)
-            for result in results:
-                coords, label = result
-                (x1, y1), (x2, y2) = coords
-
-                width = x2 - x1
-                height = y2 - y1
-                if width < 20 or height < 20 or width > 100 or height > 100:
+                models = form_instance.get_img_model()
+                if models is None:
                     continue
 
-                center_x = (x1 + x2) / 2
-                center_y = (y1 + y2) / 2
+                target_info = []
+                box_info = []
 
-                target_info.append({
-                    "label": label,
-                    "center": [center_x, center_y],
-                    "size": [width, height]
-                })
+                results = models.detect(imageMat)
+                for result in results:
+                    coords, label = result
+                    (x1, y1), (x2, y2) = coords
 
-                box_info.append({
-                    "label": label,
-                    "bbox": [x1, y1, x2, y2]
-                })
+                    width = x2 - x1
+                    height = y2 - y1
+                    if width < 20 or height < 20 or width > 100 or height > 100:
+                        continue
 
-            # for result in results:
-            #     boxes = result.boxes
+                    center_x = (x1 + x2) / 2
+                    center_y = (y1 + y2) / 2
 
-            #     if len(boxes) == 0:
-            #         continue
-            #     for box in boxes:
-            #         coords = box.xyxy[0].cpu().numpy()
-            #         score = box.conf[0].cpu().item()
-            #         if score < 0.5:
-            #             continue
-            #         x1, y1, x2, y2 = map(int, coords)
-            #         width = x2 - x1
-            #         height = y2 - y1
+                    target_info.append({
+                        "label": label,
+                        "center": [center_x, center_y],
+                        "size": [width, height]
+                    })
 
-            #         if width < 20 or height < 20 or width > 100 or height > 100:
-            #             continue
+                    box_info.append({
+                        "label": label,
+                        "bbox": [x1, y1, x2, y2]
+                    })
 
-            #         # 라벨 번호와 박스 중심점 계산
-            #         label = f"{int(box.cls[0].cpu().item())}"
-
-            #         center_x = (x1 + x2) / 2
-            #         center_y = (y1 + y2) / 2
-
-            #         # 정보를 리스트에 추가
-            #         target_info.append({
-            #             "label": label,
-            #             "center": [center_x, center_y],
-            #             "size": [width, height]
-            #         })
-
-            #         box_info.append({
-            #             "label": label,
-            #             "bbox": [x1, y1, x2, y2]
-            #         })
-
-            # DATA 딕셔너리에 업데이트
-            DATA['target_info'] = target_info
-            DATA['box_info'] = box_info
-            set_result_model(DATA)
-            # cv2.imshow('Detection and Classification Result', imageMat)
-
-            # key = cv2.waitKey(1)
-            # if key == ord('q'):
-            #     cv2.destroyAllWindows()
-            #     break
-            # elif key == ord('s'):
-            #     # 이미지 파일로 저장
-            #     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S%f")
-            #     image_filename = os.path.join(debug_folder, f"{timestamp}.jpg")
-            #     cv2.imwrite(image_filename, imageMat)
-            #     print(f"Image saved: {image_filename}")
-
-    pass
+                # DATA 딕셔너리에 업데이트
+                DATA['target_info'] = target_info
+                DATA['box_info'] = box_info
+                set_result_model(DATA)
+                # cv2.imshow('Detection and Classification Result', imageMat)
+            except Empty:
+                continue
+            # process_frame(frame)
+    finally:
+        clean_up_resources() # clean up resources
+        flush_queue(QUEUE)   # flush QUEUE instance
+        
     print("Main Image Process Thread Exit")
 
+def clean_up_resources():
+    target_info = []
+    box_info = []
+    print("Cleaning up resoures...")
