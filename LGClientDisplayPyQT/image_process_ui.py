@@ -19,6 +19,12 @@ class ImageProcessingThread(QThread):
         self.running = True
         self.trackers = {}
 
+    def update_image_data(self, image_data):
+        self.image_data = image_data
+
+    def update_selected_model(self, img_process_model):
+        self.img_process_model = img_process_model
+
     @pyqtSlot(int)
     def update_rcv_state(self, state):
         self.rcv_state_curr = state
@@ -87,21 +93,40 @@ class ImageProcessingThread(QThread):
                             px2 = int(predicted_center[0] + width / 2)
                             py2 = int(predicted_center[1] + height / 2)
 
-                            painter.setPen(QPen(QColor(173, 255, 47), 3))
-                            painter.drawRect(px1, py1, px2 - px1, py2 - py1)
-                            painter.setPen(QPen(QColor(173, 255, 47), 3))
-                            painter.drawText(px1, py1 - 5, label)
-                            painter.setPen(QPen(QColor(255, 0, 0), 3))
-                            # painter.drawEllipse(int(predicted_center[0]) - 3, int(predicted_center[1]) - 3, 6, 6)
-                          
+                            if (self.img_process_model == "YOLOv8"):
+                                painter.setPen(QPen(QColor(173, 255, 47), 3))
+                                painter.drawRect(px1, py1, px2 - px1, py2 - py1)
+                                painter.setPen(QPen(QColor(173, 255, 47), 3))
+                                painter.drawText(px1, py1 - 5, label)
+                                # painter.setPen(QPen(QColor(255, 0, 0), 3))
+                                # painter.drawEllipse(int(predicted_center[0]) - 3, int(predicted_center[1]) - 3, 6, 6)
+                            elif (self.img_process_model == "TFLite"):
+                                painter.setPen(QPen(QColor(0, 0, 255), 3))
+                                painter.drawRect(px1, py1, px2 - px1, py2 - py1)
+                                painter.setPen(QPen(QColor(0, 0, 255), 3))
+                                painter.drawText(px1, py1 - 5, label)
+                                # painter.setPen(QPen(QColor(255, 0, 0), 3))
+                                # painter.drawEllipse(int(predicted_center[0]) - 3, int(predicted_center[1]) - 3, 6, 6)
+                            elif (self.img_process_model == "OpenCV"):
+                                painter.setPen(QPen(QColor(255, 0, 0), 3))
+                                painter.drawRect(px1, py1, px2 - px1, py2 - py1)
+                                painter.setPen(QPen(QColor(255, 0, 0), 3))
+                                painter.drawText(px1, py1 - 5, label)
+                                # painter.setPen(QPen(QColor(255, 0, 0), 3))
+                                # painter.drawEllipse(int(predicted_center[0]) - 3, int(predicted_center[1]) - 3, 6, 6)
+                            else:
+                                painter.setPen(QPen(QColor(173, 255, 47), 3))
+                                painter.drawRect(px1, py1, px2 - px1, py2 - py1)
+                                painter.setPen(QPen(QColor(173, 255, 47), 3))
+                                painter.drawText(px1, py1 - 5, label)
+                                # painter.setPen(QPen(QColor(255, 0, 0), 3))
+                                # painter.drawEllipse(int(predicted_center[0]) - 3, int(predicted_center[1]) - 3, 6, 6)
+
                     painter.end()
 
                     self.image_processed.emit(pixmap)
                 self.image_data = None
                 # print("Image processing thread stopped.")
-
-    def update_image_data(self, image_data):
-        self.image_data = image_data
 
     def stop(self):
         self.running = False
