@@ -329,7 +329,6 @@ def buildTagetOrientation(msg):
                         print("data: ", data)
                         clientSock.sendall(data)
                         #safe_send_data(data)
-                        safe_send_data(clientSock, data)
 
                     print("sameCoordinateCnt: ", sameCoordinateCnt)
                     sameCoordinateCnt = 0
