@@ -119,12 +119,18 @@ class DevWindow(QMainWindow):
     # Define a signal to emit log messages
     log_signal = pyqtSignal(str)
 
+    # Register Disconnect function as pyqtSignal
+    disconnectRequested = pyqtSignal()
+
     # Define HeartbeatTimer Start and Stop event from other thread
     startHeartbeat = pyqtSignal(int)  # 타이머 시작 신호
     stopHeartbeat = pyqtSignal()      # 타이머 중지 신호
 
     def __init__(self):
         super().__init__()
+
+        # Event to signal transmitting disconnect by pyqtSignal because of callback transaction
+        self.disconnectRequested.connect(self.handle_disconnect)
 
 		# Event to signal the threads to shut down
         self.shutdown_event = threading.Event()        
@@ -205,12 +211,6 @@ class DevWindow(QMainWindow):
         self.editEngageOrder.setValidator(intValidator)
         self.editTCPPort.setValidator(intValidator)
 
-        # setCustomValidator
-        self.editIPAddress.textChanged.connect(self.validCheckIpAndPort)
-        self.editTCPPort.textChanged.connect(self.validCheckIpAndPort)
-        self.editPreArmCode.textChanged.connect(self.validCheckPreArmedCode)
-        self.editEngageOrder.textChanged.connect(self.validCheckEngageOrder)
-
         # setListener
         self.comboBoxSelectMode.currentIndexChanged.connect(self.on_combobox_changed_mode)
         self.comboBoxChangeAlgorithm.currentIndexChanged.connect(self.on_combobox_changed_algorithm)
@@ -243,6 +243,12 @@ class DevWindow(QMainWindow):
         self.log_message("Init Start...")
         self.setInitialValue()
         self.updateSystemState()
+
+        # setCustomValidator
+        self.editIPAddress.textChanged.connect(self.validCheckIpAndPort)
+        self.editTCPPort.textChanged.connect(self.validCheckIpAndPort)
+        self.editPreArmCode.textChanged.connect(self.validCheckPreArmedCode)
+        self.editEngageOrder.textChanged.connect(self.validCheckEngageOrder)
 
         # Set focus on the main window
         self.setFocusPolicy(Qt.StrongFocus)
@@ -449,29 +455,29 @@ class DevWindow(QMainWindow):
         self.tcp_thread.start()
         self.log_message("Connecting.....")
         
-        self.user_model.save_to_config(ip, port)
-        # self.currnet_state = self.State.SAFE
-        self.RcvStateCurr = ST_SAFE
-        self.setAllUIEnabled(True, False)
+    @pyqtSlot()
+    def disconnect(self):
+        # self.log_message("Disconnected")
+        self.disconnectRequested.emit()
 
-    # def reconnect(self):
-    #     ip = self.editIPAddress.text()
-    #     port = int(self.editTCPPort.text())
-    #     self.log_message(f"Reconnecting to {ip}:{port}")
-
-    #     # 아직 tcp_thread가 살아있는 경우 제거하고 다시 접속 필요
-    #     if hasattr(self, 'tcp_thread') and self.tcp_thread.is_alive():
-    #         self.shutdown_event.set()       # Signal the thread to stop
-    #         self.tcp_thread.join()
-    #         self.shutdown_event.clear()
+    @pyqtSlot()
+    def handle_disconnect(self):
+        # Terminate tcp_thread if it has been created
+        if hasattr(self, 'tcp_thread') and self.tcp_thread.is_alive():
+            print("TCP thread is tried to be closed...")
+            self.shutdown_event.set()
+            self.tcp_thread.join()  
+            print("TCP thread is closed successfully.")
+        else:
+            print("TCP thread was not active or not created.")
         
-    #     # self.shutdown_tcpevent = threading.Event()  # add for shutdown of event
-    #     self.tcp_thread = threading.Thread(target=common_start, args=(ip, port, self.shutdown_event, self)) # modify for shutdown of event
-    #     self.tcp_thread.start()
-    #     self.log_message("Connecting.....")
-        
-    #     self.user_model.save_to_config(ip, port)
-    #     self.setAllUIEnabled(True, False)
+        print("All threads are closed successfully.")
+        self.log_message("Disconnected")
+        # self.currnet_state = self.State.UNKNOWN
+        # self.currnet_state = self.State.UNKNOWN
+        self.RcvStateCurr = ST_UNKNOWN
+        self.setAllUIEnabled(False, False)
+        self.shutdown_event.clear()
 
     def setAllUIEnabled(self, connected, preArmed):
         self.updateConnectedUI(connected)
@@ -521,27 +527,6 @@ class DevWindow(QMainWindow):
             self.checkBoxLaserEnable.setEnabled(False)
             self.buttonCalibrate.setEnabled(False)
         # self.comboBoxChangeAlgorithm
-
-    @pyqtSlot()
-    def disconnect(self):
-        # self.log_message("Disconnected")
-
-        # Terminate tcp_thread if it has been created
-        if hasattr(self, 'tcp_thread') and self.tcp_thread.is_alive():
-            print("TCP thread is tried to be closed...")
-            self.shutdown_event.set()
-            self.tcp_thread.join()  
-            print("TCP thread is closed successfully.")
-        else:
-            print("TCP thread was not active or not created.")
-        
-        print("All threads are closed successfully.")
-        self.log_message("Disconnected")
-        # self.currnet_state = self.State.UNKNOWN
-        # self.currnet_state = self.State.UNKNOWN
-        self.RcvStateCurr = ST_UNKNOWN
-        self.setAllUIEnabled(False, False)
-        self.shutdown_event.clear()
 
     @pyqtSlot()
     def pre_arm_enable(self):
@@ -814,18 +799,27 @@ class DevWindow(QMainWindow):
             self.log_message("Robot is connected successfully")
             self.stopHeartbeat.emit()  # 메인 스레드에서 타이머 중지
 
+            ip = self.editIPAddress.text()
+            port = int(self.editTCPPort.text())
+            self.user_model.save_to_config(ip, port)
+            # self.currnet_state = self.State.SAFE
+            self.RcvStateCurr = ST_SAFE
+            self.setAllUIEnabled(True, False)
+            
         elif socketstate == SOCKET_FAIL_TO_CONNECT:
             self.SocketState = SOCKET_FAIL_TO_CONNECT
             self.setAllUIEnabled(False, False)
             # self.buttonConnect.setEnabled(True)
             # self.buttonDisconnect.setEnabled(False)
             self.log_message("Robot is failed to connect")
-            self.disconnect()
+            # self.disconnect()
+            self.disconnectRequested.emit()
 
         elif socketstate == SOCKET_CONNECTION_LOST:
             self.SocketState = SOCKET_CONNECTION_LOST
             self.setAllUIEnabled(False, False)
-            self.disconnect()
+            # self.disconnect()
+            self.disconnectRequested.emit()
             # self.buttonConnect.setEnabled(True)
             # self.buttonDisconnect.setEnabled(False)
             self.log_message("Robot's connection is lost - Starting retry to connect....")
@@ -901,13 +895,14 @@ class DevWindow(QMainWindow):
             self.log_message(f"TEXT Received : {text_str}")
 
         elif type_msg == MT_SOCKET:
-            # print test
-            print("Socket Message Received", type_msg)
-            print("MT_SOCKET Received :", ' '.join(f'0x{byte:02x}' for byte in message))
-
+            # Reference status : 
             # SOCKET_SUCCESS = 0
             # SOCKET_FAIL_TO_CONNECT = 1
             # SOCKET_CONNECTION_LOST = 2
+
+            # print test
+            print("Socket Message Received", type_msg)
+            print("MT_SOCKET Received :", ' '.join(f'0x{byte:02x}' for byte in message))
 
             socket_state = struct.unpack(">IIB", message)[2]
             socket_state = int(socket_state)

@@ -55,6 +55,7 @@ class TMesssageHeader:
 # global variables
 clientSock = 0
 fps = 0
+callback_shutdown_event = 0
 
 # Define for updating image to UI
 uimsg_update_callback = None
@@ -77,38 +78,46 @@ def tcp_ip_thread(ip, port, shutdown_event):
 
     print("start receiving image thread: ", ip, "(", port, ")")
     global clientSock
+    callback_shutdown_event = 0
     serverAddress = (ip, port)
     clientSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
     try:
         clientSock.connect(serverAddress)
         clientSock.settimeout(1.0)  # 1초 후에 타임아웃
-    except socket.error as e:
-        print("Failed to connect to server:", e)
+        errorCode = ERR_SUCCESS
+        packedData = struct.pack(">IIB", 1, MT_ERROR, errorCode)
+        sendMsgToUI(packedData)
+    except socket.timeout as e:
         errorCode = ERR_FAIL_TO_CONNECT
         packedData = struct.pack(">IIB", 1, MT_ERROR, errorCode)
         sendMsgToUI(packedData) # ERR_FAIL_TO_CONNECT
-        clientSock.close()
+        print(f"Network Thread Exit because of connection timed out: {e}")
+        # clientSock.close()
+        callback_shutdown_event = 1  # Notify all threads to shut down
+    except socket.error as e:
+        # print("Failed to connect to server:", e)
+        errorCode = ERR_FAIL_TO_CONNECT
+        packedData = struct.pack(">IIB", 1, MT_ERROR, errorCode)
+        sendMsgToUI(packedData) # ERR_FAIL_TO_CONNECT
         print("Network Thread Exit because of connection failure")
-        shutdown_event.set()  # Notify all threads to shut down
-        return
-
-    errorCode = ERR_SUCCESS
-    packedData = struct.pack(">IIB", 1, MT_ERROR, errorCode)
-    sendMsgToUI(packedData)
+        # clientSock.close()
+        callback_shutdown_event = 1  # Notify all threads to shut down
 
     # while True:
     global fps
     frameCnt = 0
     startTime = time.time()
-    while not shutdown_event.is_set():
+    while not shutdown_event.is_set() and callback_shutdown_event == 0:
         try:
+            #  print("SSSSSSSSSSSSSSSSStart HHHHHHHHHHHHHHHHHHHEre")
             # Receive the message header
             headerData = clientSock.recv(8)
             if headerData[0] == 0x68 and headerData[1] == 0x65:
                 continue
             elif len(headerData) != struct.calcsize('II'):
                 print("Connection lost.")
+                callback_shutdown_event = 1  # Notify all threads to shut down
                 raise ConnectionError("Connection lost.")
                 # print("lost message header ", ' '.join(f'0x{byte:02x}' for byte in headerData))
                 # packedData = struct.pack(">IIB", 1, MT_ERROR, ERR_CONNECTION_LOST)
@@ -171,29 +180,43 @@ def tcp_ip_thread(ip, port, shutdown_event):
             else:
                 #print("len_ ", len_, "header type_ ", type_, "data_", int.from_bytes(buffer, byteorder='big'))
                 sendMsgToUI(packedData)
+
         except socket.timeout:
             continue  # For non-blocking mode when using recv(), we set timeout thus continuing recv()
         except socket.error as e:
             print(f"Network error occurred: {e}")
             packedData = struct.pack(">IIB", 1, MT_ERROR, ERR_CONNECTION_LOST)
             sendMsgToUI(packedData)
-            # clientSock.close()
-            shutdown_event.set()  # Ensure all threads are notified to stop
-            print("Network Thread Exit")
-        # finally:
-        #     clientSock.close()
-        #     shutdown_event.set()  # Ensure all threads are notified to stop
-        #     print("Network Thread Exit")
-
-        # except socket.error as e:
-        #     print("Connection lost:", str(e))
-        #     packedData = struct.pack(">IIB", 1, MT_ERROR, ERR_CONNECTION_LOST)
-        #     sendMsgToUI(packedData)
-        #     break
-        # pass
+            callback_shutdown_event = 1
 
     clientSock.close()
+    callback_shutdown_event = 0 # reset callback_shutdown_event
     print("tcp_ip_thread Thread is closed successfully.")
+
+# Function to check if the socket is connected
+def is_socket_connected(sock):
+    try:
+        # the following sends zero bytes over the socket
+        # this is generally a no-op that should succeed only if the socket is open
+        sock.sendall(b'', flags=socket.MSG_DONTWAIT)
+        return True
+    except socket.error as e:
+        # socket is not open if send raises an error
+        # specific errors like EAGAIN or EWOULDBLOCK indicate socket is open but cannot send right now
+        return False
+    except Exception as e:
+        return False
+
+# Function to safely send data
+def safe_send_data(sock, data):
+    if is_socket_connected(sock):
+        try:
+            sock.sendall(data)
+            print("Data sent successfully.")
+        except socket.error as e:
+            print(f"Failed to send data: {e}")
+    else:
+        print("Socket is not connected.")
 
 def buildTagetOrientation(msg):
     print("target sequence: ", msg)
@@ -275,7 +298,8 @@ def buildTagetOrientation(msg):
                         lastTilt = tilt
 
                         print("data: ", data)
-                        clientSock.sendall(data)
+                        # clientSock.sendall(data)
+                        safe_send_data(clientSock, data)
 
                     print("sameCoordinateCnt: ", sameCoordinateCnt)
                     sameCoordinateCnt = 0
@@ -283,14 +307,16 @@ def buildTagetOrientation(msg):
                     data.extend(struct.pack('>II', 1, MT_FIRE))
                     data.append(255)
                     print("fire: ", data)
-                    clientSock.sendall(data)
+                    # clientSock.sendall(data)
+                    safe_send_data(clientSock, data)
                     break
 
         data = bytearray()
         data.extend(struct.pack('>II', 1, MT_COMPLETE))
         data.append(255)
         print("complete: ", data)
-        clientSock.sendall(data)
+        # clientSock.sendall(data)
+        safe_send_data(clientSock, data)
     else:
         print("no target_info")
 
@@ -315,7 +341,7 @@ def sendMsgToUI(msg):
         print("No callback function set for image update.")
 
 def buildTargetOrientationThread(shutdown_event):
-    while not shutdown_event.is_set():
+    while not shutdown_event.is_set(): # and callback_shutdown_event == 0:
         try:
             msg = task_queue.get(timeout=1)  # 1초 동안 대기
             buildTagetOrientation(msg)

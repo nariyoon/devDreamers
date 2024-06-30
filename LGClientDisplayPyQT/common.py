@@ -24,7 +24,7 @@ def common_start(ip, port, shutdown_event, form_instance):
     # 스레드가 완료될 때까지 대기
     armed_thread.join()
     tcp_thread.join()
-    frame_stack.put(None)  # 종료 신호
+    # frame_stack.put(None)  # 종료 신호
     processing_thread.join()
 
 	# 정리 작업 수행
