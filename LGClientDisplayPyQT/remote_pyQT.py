@@ -375,11 +375,9 @@ class DevWindow(QMainWindow):
             ###########################################
             ## 1안 : Sequence + AutoEngage Switching ##
             ###########################################
-            char_array = self.get_char_array_autoengage_from_text(self.editEngageOrder)
-            self.send_target_order_to_server(char_array)
+			# nothing to do in the mode change to auto engage
             self.log_message(f"Auto Engage State is Changed: {self.editEngageOrder}")
             print("Auto Engage State is Changed: ", {self.editEngageOrder})
-            self.send_state_change_request_to_server(ST_AUTO_ENGAGE)   
 
             # ###########################################
             # ## 2안 : Sequence + AutoEngage Switching ##
@@ -397,6 +395,7 @@ class DevWindow(QMainWindow):
         self.send_target_order_to_server(char_array)
         print("Auto Engage Fire Started: ", {self.editEngageOrder})
         self.set_command(CT_FIRE_START)
+        self.send_state_change_request_to_server(ST_AUTO_ENGAGE) 
 
         # ###########################################
         # ## 2안 : Switching Start to Stop         ##

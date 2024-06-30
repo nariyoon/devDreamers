@@ -25,6 +25,7 @@ MT_TARGET_DIFF = 9
 MT_ERROR = 10
 MT_COMPLETE = 11
 MT_FIRE = 12
+MT_GO_CENTER = 13
 
 # cannon status
 UNKNOWN = 0
@@ -45,6 +46,25 @@ ERR_CONNECTION_LOST = 2
 # image width and height
 WIDTH = 960
 HEIGHT = 544
+def print_socket_info():
+    global clientSock
+    # Get socket family (AF_INET, AF_INET6, ...)
+    print(f"Socket family: {clientSock.family}")
+    
+    # Get socket type (SOCK_STREAM, SOCK_DGRAM, ...)
+    print(f"Socket type: {clientSock.type}")
+    
+    # Get socket protocol (0 if unknown)
+    print(f"Socket protocol: {clientSock.proto}")
+    
+    # Get local address and port
+    print(f"Local address: {clientSock.getsockname()}")
+    
+    # Get remote address and port if connected
+    if clientSock.fileno() != -1:  # Check if socket is connected
+        print(f"Remote address: {clientSock.getpeername()}")
+    else:
+        print("Socket is not connected.")
 
 # Define message structures
 class TMesssageHeader:
@@ -194,11 +214,12 @@ def tcp_ip_thread(ip, port, shutdown_event):
     print("tcp_ip_thread Thread is closed successfully.")
 
 # Function to check if the socket is connected
-def is_socket_connected(sock):
+def is_socket_connected():
+    global clientSock
     try:
         # the following sends zero bytes over the socket
         # this is generally a no-op that should succeed only if the socket is open
-        sock.sendall(b'', flags=socket.MSG_DONTWAIT)
+        clientSock.sendall(b'', flags=clientSock.MSG_DONTWAIT)
         return True
     except socket.error as e:
         # socket is not open if send raises an error
@@ -208,15 +229,23 @@ def is_socket_connected(sock):
         return False
 
 # Function to safely send data
-def safe_send_data(sock, data):
-    if is_socket_connected(sock):
+def safe_send_data(data):
+    global clientSock
+    if is_socket_connected():
         try:
-            sock.sendall(data)
+            clientSock.sendall(data)
             print("Data sent successfully.")
         except socket.error as e:
             print(f"Failed to send data: {e}")
     else:
         print("Socket is not connected.")
+def sendEmptyMsg(target):
+    data = bytearray()
+    data.extend(struct.pack('>II', 1, target))
+    data.append(255)
+    print("sendEmptyMsg : {target}")
+    #safe_send_data(data)
+    clientSock.sendall(data)
 
 def buildTagetOrientation(msg):
     print("target sequence: ", msg)
@@ -298,25 +327,18 @@ def buildTagetOrientation(msg):
                         lastTilt = tilt
 
                         print("data: ", data)
-                        # clientSock.sendall(data)
+                        clientSock.sendall(data)
+                        #safe_send_data(data)
                         safe_send_data(clientSock, data)
 
                     print("sameCoordinateCnt: ", sameCoordinateCnt)
                     sameCoordinateCnt = 0
-                    data = bytearray()
-                    data.extend(struct.pack('>II', 1, MT_FIRE))
-                    data.append(255)
-                    print("fire: ", data)
-                    # clientSock.sendall(data)
-                    safe_send_data(clientSock, data)
-                    break
+                    sendEmptyMsg(MT_FIRE)
 
-        data = bytearray()
-        data.extend(struct.pack('>II', 1, MT_COMPLETE))
-        data.append(255)
-        print("complete: ", data)
-        # clientSock.sendall(data)
-        safe_send_data(clientSock, data)
+                    break
+        sendEmptyMsg(MT_COMPLETE)
+	    #Below is sample to let go aim to the center(if it can't find the target)
+        sendEmptyMsg(MT_GO_CENTER)
     else:
         print("no target_info")
 
