@@ -169,19 +169,17 @@ class DevWindow(QMainWindow):
         app.setStyleSheet(qdarktheme.load_stylesheet())
         self.initUI()
 
-        self.recv_callback = None
-        self.send_command_callback = None
-        # self.buttonPreArmEnable.text = "PRE-ARMED"
-
-        # # Socket related 타이머 설정
         self.HeartbeatTimer = QTimer(self)
         self.HeartbeatTimer.timeout.connect(self.HeartBeatTimer_event)
         # Connect signal and slot for HeartTimer
-        self.startHeartbeat.connect(self.HeartbeatTimer.start)
+        self.startHeartbeat.connect(self.start_heartbeat_timer)
         self.stopHeartbeat.connect(self.HeartbeatTimer.stop)
 
         self.show()
 
+    def start_heartbeat_timer(self, interval):
+        self.HeartbeatTimer.start(interval)
+        
     def update_model_combobox(self):
         # Clear existing items
         self.comboBoxChangeAlgorithm.clear()
@@ -222,19 +220,29 @@ class DevWindow(QMainWindow):
         self.buttonStart.clicked.connect(self.send_autoengage_start)
 
         # direction buttons
-        self.buttonUp.setIcon(QIcon('resources/arrow_up.png'))
+        # Current file path of script of remote.ui file
+        # ui_file = 'new_remote.ui'
+        # ui_mainwindow = uic.loadUi(ui_file, self)
+        script_dir = os.path.dirname(os.path.realpath(__file__))
+        resources_path = os.path.join(script_dir, 'resources/')
+        # self.buttonUp.setIcon(QIcon('resources/arrow_up.png'))
+        self.buttonUp.setIcon(QIcon(os.path.join(resources_path, 'arrow_up.png')))
         self.buttonUp.setStyleSheet("border: none;")
         self.buttonUp.clicked.connect(self.clicked_command_up)
-        self.buttonDown.setIcon(QIcon('resources/arrow_down.png'))
+        # self.buttonDown.setIcon(QIcon('resources/arrow_down.png'))
+        self.buttonDown.setIcon(QIcon(os.path.join(resources_path, 'arrow_down.png')))
         self.buttonDown.setStyleSheet("border: none;")
         self.buttonDown.clicked.connect(self.clicked_command_down)
-        self.buttonRight.setIcon(QIcon('resources/arrow_right.png'))
+        # self.buttonRight.setIcon(QIcon('resources/arrow_right.png'))
+        self.buttonRight.setIcon(QIcon(os.path.join(resources_path, 'arrow_right.png')))
         self.buttonRight.setStyleSheet("border: none;")
         self.buttonRight.clicked.connect(self.clicked_command_right)
-        self.buttonLeft.setIcon(QIcon('resources/arrow_left.png'))
+        # self.buttonLeft.setIcon(QIcon('resources/arrow_left.png'))
+        self.buttonLeft.setIcon(QIcon(os.path.join(resources_path, 'arrow_left.png')))
         self.buttonLeft.setStyleSheet("border: none;")
         self.buttonLeft.clicked.connect(self.clicked_command_left)
-        self.buttonFire.setIcon(QIcon('resources/exit.png'))
+        # self.buttonFire.setIcon(QIcon('resources/exit.png'))
+        self.buttonFire.setIcon(QIcon(os.path.join(resources_path, 'exit.png')))
         self.buttonFire.setStyleSheet("border: none;")
         self.buttonFire.clicked.connect(self.clicked_command_fire)
 
@@ -375,8 +383,8 @@ class DevWindow(QMainWindow):
             ## 1안 : Sequence + AutoEngage Switching ##
             ###########################################
 			# nothing to do in the mode change to auto engage
-            self.log_message(f"Auto Engage State is Changed: {self.editEngageOrder}")
-            print("Auto Engage State is Changed: ", {self.editEngageOrder})
+            self.log_message(f"Auto Engage State is Changed") # : {self.editEngageOrder}")
+            # print("Auto Engage State is Changed: ", {self.editEngageOrder})
             self.send_state_change_request_to_server(ST_AUTO_ENGAGE)
 
             # ###########################################
@@ -569,26 +577,31 @@ class DevWindow(QMainWindow):
 
     @pyqtSlot()
     def toggle_laser(self):
-        # Start Armed Manual 
-        self.log_message(f"Laser Enabled: {self.checkBoxLaserEnable.isChecked()}")
-        print("Laser Enabled: ", {self.checkBoxLaserEnable.isChecked()})
+        try:
+            # Start Armed Manual 
+            self.log_message(f"Laser Enabled: {self.checkBoxLaserEnable.isChecked()}")
+            print("Laser Enabled: ", {self.checkBoxLaserEnable.isChecked()})
 
-        if isinstance(self.RcvStateCurr, bytes):
-            state_int = int.from_bytes(self.RcvStateCurr, byteorder='little')
-        else:
-            state_int = self.RcvStateCurr
-
-        if (self.checkBoxLaserEnable.isChecked() == True):
-            # state_int should be 72
-            if (state_int & ST_ARMED_MANUAL) == ST_ARMED_MANUAL:
-                state_int |= ST_LASER_ON
+            if isinstance(self.RcvStateCurr, bytes):
+                state_int = int.from_bytes(self.RcvStateCurr, byteorder='little')
             else:
-                state_int |= (ST_ARMED_MANUAL|ST_LASER_ON)
-            self.send_state_change_request_to_server(state_int)
-        else:
-            # state_int should be 8
-            state_int &= ST_CLEAR_LASER_MASK
-            self.send_state_change_request_to_server(state_int)
+                state_int = self.RcvStateCurr
+
+            if self.checkBoxLaserEnable.isChecked():
+                # state_int should be 72
+                if (state_int & ST_ARMED_MANUAL) == ST_ARMED_MANUAL:
+                    state_int |= ST_LASER_ON
+                else:
+                    state_int |= (ST_ARMED_MANUAL|ST_LASER_ON)
+                self.send_state_change_request_to_server(state_int)
+            else:
+                # state_int should be 8
+                state_int &= ST_CLEAR_LASER_MASK
+                self.send_state_change_request_to_server(state_int)
+
+        except Exception as e:
+            self.log_message(f"Error in toggle_laser: {str(e)}")
+            print(f"Error in toggle_laser: {str(e)}")
     
     @pyqtSlot()
     def send_calib(self):

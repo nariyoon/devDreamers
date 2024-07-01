@@ -199,9 +199,7 @@ def tcp_ip_thread(ip, port, shutdown_event):
                 if elapsedTime > 0:
                     fps = frameCnt / elapsedTime
                     #print(f"FPS: {fps:.2f}", end='\r')
-                    fps_info.append({
-                    "fps": fps})
-
+                    fps_info.append({"fps": fps})
                     fps_queue.put(fps_info)
             else:
                 #print("len_ ", len_, "header type_ ", type_, "data_", int.from_bytes(buffer, byteorder='big'))
