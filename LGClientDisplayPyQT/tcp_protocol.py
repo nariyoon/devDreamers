@@ -11,6 +11,7 @@ from queue import LifoQueue
 import threading
 import time
 import queue
+from cannon_queue import *
 
 # Define message types
 MT_COMMANDS = 1
@@ -96,6 +97,9 @@ def tcp_ip_thread(ip, port, shutdown_event):
     This thread handles TCP/IP communication with the Raspberry Pi.
     """
 
+    # For update fps to ui 
+    fps_info = []   
+
     print("start receiving image thread: ", ip, "(", port, ")")
     global clientSock
     callback_shutdown_event = 0
@@ -130,7 +134,6 @@ def tcp_ip_thread(ip, port, shutdown_event):
     startTime = time.time()
     while not shutdown_event.is_set() and callback_shutdown_event == 0:
         try:
-            #  print("SSSSSSSSSSSSSSSSStart HHHHHHHHHHHHHHHHHHHEre")
             # Receive the message header
             headerData = clientSock.recv(8)
             if headerData[0] == 0x68 and headerData[1] == 0x65:
@@ -196,12 +199,16 @@ def tcp_ip_thread(ip, port, shutdown_event):
                 if elapsedTime > 0:
                     fps = frameCnt / elapsedTime
                     #print(f"FPS: {fps:.2f}", end='\r')
+                    fps_info.append({
+                    "fps": fps})
 
+                    fps_queue.put(fps_info)
             else:
                 #print("len_ ", len_, "header type_ ", type_, "data_", int.from_bytes(buffer, byteorder='big'))
                 sendMsgToUI(packedData)
 
         except socket.timeout:
+            print("At tcp_protocol thread check : ", shutdown_event.is_set())
             continue  # For non-blocking mode when using recv(), we set timeout thus continuing recv()
         except socket.error as e:
             print(f"Network error occurred: {e}")

@@ -1,6 +1,6 @@
 # image_process_ui.py
 
-from PyQt5.QtCore import QThread, pyqtSignal, pyqtSlot
+from PyQt5.QtCore import QThread, pyqtSignal, QPoint, pyqtSlot
 from PyQt5.QtGui import QPixmap, QImage, QPainter, QPen, QColor
 import cv2
 import numpy as np
@@ -8,8 +8,6 @@ from image_process import get_result_model
 from image_algo.kalman_filter import KalmanBoxTracker
 import time
 from cannon_queue import *
-
-
 
 class ImageProcessingThread(QThread):
     image_processed = pyqtSignal(QPixmap)
@@ -32,20 +30,6 @@ class ImageProcessingThread(QThread):
     def update_rcv_state(self, state):
         self.rcv_state_curr = state
 
-    def save_box_info():
-        while True:
-            result_data = get_result_model()
-            if result_data and 'box_info' in result_data:
-                box_info_list = result_data['box_info']
-                print("Box Info List:")
-                for box_info in box_info_list:
-                    print(box_info)
-                    # # Save each box_info to a file or use it as needed
-                    # with open("box_info.txt", "a") as file:
-                    #     file.write(f"{box_info}\n")
-            # time.sleep(1)  # Sleep for 1 second before checking again
-
-    
     def run(self):
         while self.running:
             time.sleep(0.01)  # Tuning point
@@ -54,21 +38,37 @@ class ImageProcessingThread(QThread):
                 img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
                 
                 if img is not None:
+                    X_correct = 490  # Tuning Point compared to Laser
+                    Y_correct = 310  # Tuning Point compared to Laser
                     img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
                     h, w, ch = img_rgb.shape
                     bytes_per_line = ch * w
                     qt_image = QImage(img_rgb.data, w, h, bytes_per_line, QImage.Format_RGB888)
                     pixmap = QPixmap.fromImage(qt_image)
 
-                    # Add red cross hair in pixmap
+                    # Create painter to draw on pixmap
                     painter = QPainter(pixmap)
                     pen = QPen(QColor(255, 0, 0), 2)
                     painter.setPen(pen)
-                    center_x = w // 2
-                    center_y = h // 2
-                    half_size = 30  # Change the crosshair size if needed
-                    painter.drawLine(center_x - half_size, center_y, center_x + half_size, center_y)
-                    painter.drawLine(center_x, center_y - half_size, center_x, center_y + half_size)
+                    crosshair_size = 30  # Size of the crosshair
+
+                    # Draw the crosshair at the specified offset position
+                    painter.drawLine(X_correct - crosshair_size, Y_correct, X_correct + crosshair_size, Y_correct)
+                    painter.drawLine(X_correct, Y_correct - crosshair_size, X_correct, Y_correct + crosshair_size)
+
+                    # # Crop and resize the image around the new crosshair center
+                    # crop_size = 200  # Define the size of the crop area
+                    # x1 = max(0, X_correct - crop_size // 2)
+                    # y1 = max(0, Y_correct - crop_size // 2)
+                    # x2 = min(w, X_correct + crop_size // 2)
+                    # y2 = min(h, Y_correct + crop_size // 2)
+                    # cropped_img = img[y1:y2, x1:x2]
+                    # cropped_img = cv2.resize(cropped_img, (w, h))  # Resize to the original size
+
+                    # Convert the cropped and resized image back to QImage and QPixmap
+                    # cropped_rgb = cv2.cvtColor(cropped_img, cv2.COLOR_BGR2RGB)
+                    # cropped_qt_image = QImage(cropped_rgb.data, w, h, bytes_per_line, QImage.Format_RGB888)
+                    # cropped_pixmap = QPixmap.fromImage(cropped_qt_image)
 
                     # Draw boxes from box_info
                     try:
@@ -93,8 +93,33 @@ class ImageProcessingThread(QThread):
                     except Empty:
                         pass
 
+                    # Create a FPS Text to modify the QPixmap
+                    # painter = QPainter(pixmap)
+                    try:
+                        fps_data = fps_queue.get_nowait()
+                        for fps_info in fps_data:
+                            rt_fps = fps_info['fps']
+                        # Set the pen color to black and make the text bold
+                        pen = QPen(QColor(0, 0, 0))  # Black color
+                        painter.setPen(pen)
+                        font = painter.font()
+                        font.setPixelSize(20)  # Adjust font size
+                        font.setBold(True)  # Set the font to be bold
+                        painter.setFont(font)
+
+                        # Text to display
+                        display_text = f"AVG FPS : {rt_fps:.2f}" 
+                        text_position = QPoint(10, h - 30)  # Adjust coordinates for the bottom left
+
+                        # Draw text at specified position
+                        painter.drawText(text_position, display_text)
+
+                    except Empty:
+                        pass
+
                     painter.end()
                     self.image_processed.emit(pixmap)
+
                 self.image_data = None
 
     def stop(self):

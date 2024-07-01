@@ -8,8 +8,6 @@ frame_queue = Queue(maxsize=10)
 frame_stack = LifoQueue(maxsize=10)
 task_queue = Queue()
 
-
-
 class OverwritingQueue(Queue):
     def __init__(self, maxsize):
         super().__init__(maxsize)
@@ -26,3 +24,4 @@ class OverwritingQueue(Queue):
 # Save result data
 target_queue = OverwritingQueue(maxsize=1)
 box_queue = OverwritingQueue(maxsize=1)
+fps_queue = OverwritingQueue(maxsize=1)

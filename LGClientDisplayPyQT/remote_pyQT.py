@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QCheckBox, Q
 from PyQt5.QtGui import QPixmap, QIntValidator, QIcon, QMovie
 from PyQt5.QtCore import pyqtSignal, pyqtSlot, Qt, QTimer, QMetaObject, Q_ARG # , qRegisterMetaType
 from usermodel.usermodel import UserModel
-from tcp_protocol import sendMsgToCannon, set_uimsg_update_callback, getFps
+from tcp_protocol import sendMsgToCannon, set_uimsg_update_callback #, getFps
 from common import common_start
 from PyQt5 import uic
 from queue import Queue
@@ -300,12 +300,11 @@ class DevWindow(QMainWindow):
         self.pictureBox.setAlignment(Qt.AlignCenter)
         self.layeredQVBox.addWidget(self.pictureBox)
 
-        # fps 
-        self.fps = QLabel("Average FPS : N/A", self)
-        self.layeredQVBox.addWidget(self.fps)
+        # # fps 
+        # self.fps = QLabel("Average FPS : N/A", self)
+        # self.layeredQVBox.addWidget(self.fps)
 
         self.overlayWidget.setLayout(self.layeredQVBox)
-
 
     def setHitResult(self, result, targetNumber): 
         result = 'HIT!!' if result else 'MISS'
@@ -378,6 +377,7 @@ class DevWindow(QMainWindow):
 			# nothing to do in the mode change to auto engage
             self.log_message(f"Auto Engage State is Changed: {self.editEngageOrder}")
             print("Auto Engage State is Changed: ", {self.editEngageOrder})
+            self.send_state_change_request_to_server(ST_AUTO_ENGAGE)
 
             # ###########################################
             # ## 2안 : Sequence + AutoEngage Switching ##
@@ -388,25 +388,32 @@ class DevWindow(QMainWindow):
 
     @pyqtSlot()                
     def send_autoengage_start(self):
+        # ###########################################
+        # ## 1안 : Just Start with Order           ##
+        # ###########################################
+        # char_array = self.get_char_array_autoengage_from_text(self.editEngageOrder)
+        # self.send_target_order_to_server(char_array)
+        # print("Auto Engage Fire Started: ", {self.editEngageOrder})
+        # self.set_command(CT_FIRE_START)
+        # self.send_state_change_request_to_server(ST_AUTO_ENGAGE) 
+
         ###########################################
-        ## 1안 : Just Start with Order           ##
+        ## 2안 : Switching Start to Stop         ##
         ###########################################
         char_array = self.get_char_array_autoengage_from_text(self.editEngageOrder)
         self.send_target_order_to_server(char_array)
-        print("Auto Engage Fire Started: ", {self.editEngageOrder})
-        self.set_command(CT_FIRE_START)
-        self.send_state_change_request_to_server(ST_AUTO_ENGAGE) 
 
-        # ###########################################
-        # ## 2안 : Switching Start to Stop         ##
-        # ###########################################
-        # current_text = self.buttonStart.text()
-        # if current_text == "START":
-        #     self.log_message(f"Auto Engage Fire Started: {self.editEngageOrder}")
-        #     self.set_command(CT_FIRE_START)  # AUTO ENGAGE 시작 상태로 전환하는 함수
-        # elif current_text == "STOP":
-        #     self.log_message(f"Auto Engage Fire Stopping: {self.editEngageOrder}")
-        #     self.set_command(CT_FIRE_STOP)  # AUTO ENGAGE 시작 상태로 전환하는 함수
+        current_text = self.buttonStart.text()
+        if current_text == "START":
+            self.buttonStart.setText('STOP')  # Update button text to "STOP"
+            self.log_message(f"Auto Engage Fire Started: {self.editEngageOrder}")
+            # self.set_command(CT_FIRE_START)  # Signal to start auto engagement
+            
+        elif current_text == "STOP":
+            self.buttonStart.setText('START')  # Update button text back to "START"
+            self.log_message(f"Auto Engage Fire Stopping: {self.editEngageOrder}")
+            self.set_command(CT_FIRE_STOP)  # Signal to stop auto engagement
+            self.send_state_change_request_to_server(ST_SAFE)  # Assuming 'ST_SAFE' is the state to return to
 
     # def on_combobox_changed_algorithm(self, index):
     #     # Your code here to handle the index change
@@ -419,8 +426,6 @@ class DevWindow(QMainWindow):
 
     @pyqtSlot(int)
     def on_combobox_changed_algorithm(self, index):
-        print("Valid Call?")
-
         if 0 <= index < len(self.img_model_global):
             self.selected_model = self.img_model_global[index]
             self.model_changed.emit(self.selected_model)
@@ -880,7 +885,7 @@ class DevWindow(QMainWindow):
 
             self.image_received.emit(image_data)
             # Show average FPS to Label
-            getFps()
+            # getFps()
 
         # 나머지 MT_MSG 들은 byte 배열이 들어오므로 bit -> little 변환이 필요함, 송신도 마찬가지
         elif type_msg == MT_STATE:
