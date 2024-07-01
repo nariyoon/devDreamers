@@ -1,24 +1,23 @@
 # image_process_ui.py
 
-from PyQt5.QtCore import QThread, pyqtSignal, QPoint, pyqtSlot
-from PyQt5.QtGui import QPixmap, QImage, QPainter, QPen, QColor
+from PyQt5.QtCore import QThread, pyqtSignal, QPoint, pyqtSlot, Qt
+from PyQt5.QtGui import QPixmap, QImage, QPainter, QPen, QColor, QFont
 import cv2
 import numpy as np
-from image_process import get_result_model
-from image_algo.kalman_filter import KalmanBoxTracker
 import time
-from cannon_queue import *
+from queue import Empty
+from cannon_queue import box_queue
 
 class ImageProcessingThread(QThread):
     image_processed = pyqtSignal(QPixmap)
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        # self.shutdown_event = shutdown_event
         self.image_data = None
         self.rcv_state_curr = None
         self.running = True
         self.trackers = {}
+        self.prev_data = []
 
     def update_image_data(self, image_data):
         self.image_data = image_data
@@ -32,7 +31,7 @@ class ImageProcessingThread(QThread):
 
     def run(self):
         while self.running:
-            time.sleep(0.01)  # Tuning point
+            time.sleep(0.02)  # Tuning point
             if self.image_data is not None:
                 np_arr = np.frombuffer(self.image_data, np.uint8)
                 img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
@@ -55,68 +54,50 @@ class ImageProcessingThread(QThread):
                     # Draw the crosshair at the specified offset position
                     painter.drawLine(X_correct - crosshair_size, Y_correct, X_correct + crosshair_size, Y_correct)
                     painter.drawLine(X_correct, Y_correct - crosshair_size, X_correct, Y_correct + crosshair_size)
-
-                    # # Crop and resize the image around the new crosshair center
-                    # crop_size = 200  # Define the size of the crop area
-                    # x1 = max(0, X_correct - crop_size // 2)
-                    # y1 = max(0, Y_correct - crop_size // 2)
-                    # x2 = min(w, X_correct + crop_size // 2)
-                    # y2 = min(h, Y_correct + crop_size // 2)
-                    # cropped_img = img[y1:y2, x1:x2]
-                    # cropped_img = cv2.resize(cropped_img, (w, h))  # Resize to the original size
-
-                    # Convert the cropped and resized image back to QImage and QPixmap
-                    # cropped_rgb = cv2.cvtColor(cropped_img, cv2.COLOR_BGR2RGB)
-                    # cropped_qt_image = QImage(cropped_rgb.data, w, h, bytes_per_line, QImage.Format_RGB888)
-                    # cropped_pixmap = QPixmap.fromImage(cropped_qt_image)
-
+                    if self.img_process_model == "YOLOv8":
+                        pen_color = QColor(173, 255, 47)  # Green
+                    elif self.img_process_model == "TFLite":
+                        pen_color = QColor(0, 0, 255)  # Blue
+                    elif self.img_process_model == "OpenCV":
+                        pen_color = QColor(255, 0, 0)  # Red
+                    else:
+                        pen_color = QColor(173, 255, 47)  # Default Green
                     # Draw boxes from box_info
-                    try:
+                    try:                      
                         result_data = box_queue.get_nowait()
-                        for box_info in result_data:
+                        self.prev_data = result_data.copy()
+                    except Empty:
+                        result_data = self.prev_data
+
+                    for box_info in result_data:
                             x1, y1, x2, y2 = box_info['bbox']
                             label = box_info['label']
-
-                            if self.img_process_model == "YOLOv8":
-                                pen_color = QColor(173, 255, 47)  # Green
-                            elif self.img_process_model == "TFLite":
-                                pen_color = QColor(0, 0, 255)  # Blue
-                            elif self.img_process_model == "OpenCV":
-                                pen_color = QColor(255, 0, 0)  # Red
+                            if label == "10":
+                                pen_color = QColor(255, 0, 0)  # Red for hand
+                                label_text = "hand"
+                                painter.setPen(QPen(pen_color, 3))
                             else:
-                                pen_color = QColor(173, 255, 47)  # Default Green
+                                label_text = label
+                                painter.setPen(QPen(pen_color, 2))
 
-                            painter.setPen(QPen(pen_color, 3))
+                            # Draw the bounding box
                             painter.drawRect(x1, y1, x2 - x1, y2 - y1)
-                            painter.drawText(x1, y1 - 5, label)
 
-                    except Empty:
-                        pass
+                            # Set font for the label
+                            font = QFont()
+                            font.setBold(True)
+                            font.setPixelSize(12)
+                            painter.setFont(font)
 
-                    # # Create a FPS Text to modify the QPixmap
-                    # # painter = QPainter(pixmap)
-                    # try:
-                    #     fps_data = fps_queue.get_nowait()
-                    #     for fps_info in fps_data:
-                    #         rt_fps = fps_info['fps']
-                    #     # Set the pen color to black and make the text bold
-                    #     pen = QPen(QColor(0, 0, 0))  # Black color
-                    #     painter.setPen(pen)
-                    #     font = painter.font()
-                    #     font.setPixelSize(20)  # Adjust font size
-                    #     font.setBold(True)  # Set the font to be bold
-                    #     painter.setFont(font)
+                            # Draw label background
+                            label_size = painter.fontMetrics().size(0, label_text)
+                            painter.setBrush(QColor(255, 255, 255))
+                            painter.drawRect(x1, y1 - label_size.height() - 4, label_size.width() + 4, label_size.height() + 4)
+                            painter.setBrush(Qt.NoBrush)  # Reset brush to no brush
 
-                    #     # Text to display
-                    #     display_text = f"AVG FPS : {rt_fps:.2f}" 
-                    #     text_position = QPoint(10, h - 30)  # Adjust coordinates for the bottom left
-
-                    #     # Draw text at specified position
-                    #     painter.drawText(text_position, display_text)
-
-                    # except Empty:
-                    #     pass
-
+                            # Draw label text
+                            painter.setPen(QColor(0, 0, 0))  # Black text
+                            painter.drawText(x1 + 2, y1 - 2, label_text)
                     painter.end()
                     self.image_processed.emit(pixmap)
 

@@ -14,6 +14,7 @@ from datetime import datetime
 from filterpy.kalman import KalmanFilter
 import copy
 import torch
+import mediapipe as mp
 
 from cannon_queue import *
 
@@ -213,36 +214,27 @@ def flush_queue(q):
         except:
             break  # 큐가 비어있으면 반복 종료 Queue.empty()
 
+
 def image_processing_thread(QUEUE, shutdown_event, form_instance):
     DATA = {}
     debug_folder = "debug"
     os.makedirs(debug_folder, exist_ok=True)
+    # Mediapipe 로그 레벨 설정
+    os.environ['GLOG_minloglevel'] = '2'
 
-    # if shutdown_event.is_set() == True:
-    #     print("shutdown_event already set in image_processing")
+    # Mediapipe 손 모듈 초기화
+    mp_hands = mp.solutions.hands
+    hands = mp_hands.Hands()
+    mp_drawing = mp.solutions.drawing_utils
+
+    import psutil
+    p = psutil.Process(os.getpid())
+    p.nice(psutil.REALTIME_PRIORITY_CLASS)
 
     while not shutdown_event.is_set():
         try:
-            # time.sleep(0.01)  # Tuning point
             frame = QUEUE.get(timeout=1)
-            
-            # if frame is None:  # 종료 신호로 None 사용 가능
-            #     print("Queue is zero")
-            #     break
-
-            # if not QUEUE.empty():
             imageMat = cv2.imdecode(np.frombuffer(frame, dtype=np.uint8), cv2.IMREAD_COLOR)
-            # h, w, _ = imageMat.shape
-            # print(f"width {w}, height {h}")
-
-            # img_model_global 값을 가져오는 예제
-            # img_model = form_instance.get_img_model()
-            # if img_model is not None:
-            #     # print("Model is initialized and ready to use.")
-            #     results = img_model.predict(imageMat, imgsz=[960, 544], verbose=False)
-            # else:
-            #     # print("Model is not initialized yet.")
-            #     continue
 
             models = form_instance.get_img_model()
             if models is None:
@@ -277,32 +269,37 @@ def image_processing_thread(QUEUE, shutdown_event, form_instance):
                     "center": [center_x, center_y],
                 })
 
-                # # 박스와 라벨을 이미지에 그림
-                # cv2.rectangle(imageMat, (x1, y1), (x2, y2), (255, 0, 0), 2)
-                # cv2.putText(imageMat, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+            # 성능을 위해 이미지를 RGB로 변환
+            image = cv2.cvtColor(imageMat, cv2.COLOR_BGR2RGB)
+            results = hands.process(image)
+            # 이미지를 다시 BGR로 변환
+            # image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+            if results.multi_hand_landmarks:
+                for hand_landmarks in results.multi_hand_landmarks:
+                    # 랜드마크 좌표로 경계 상자 계산
+                    x_min, y_min = float('inf'), float('inf')
+                    x_max, y_max = float('-inf'), float('-inf')
+                    for landmark in hand_landmarks.landmark:
+                        x, y = int(landmark.x * image.shape[1]), int(landmark.y * image.shape[0])
+                        x_min, y_min = min(x_min, x), min(y_min, y)
+                        x_max, y_max = max(x_max, x), max(y_max, y)
 
+                    box_info.append({
+                        "label": "10",
+                        "bbox": [x_min, y_min, x_max, y_max],
+                        "center": [(x_min + x_max) / 2, (y_min + y_max) / 2],
+                    })
 
             # DATA 딕셔너리에 업데이트
             DATA['target_info'] = target_info
-            # DATA['box_info'] = box_info
 
-
-            # target_queue.put(target_info)
             box_queue.put(box_info)
-            # target_queue.put(target_info)
             set_result_model(DATA)
-
-            # cv2.imshow('Detection and Classification Result', imageMat)
-
-            # key = cv2.waitKey(1) & 0xFF
-            # if key == ord('q'):  # Quit without saving
-            #     cv2.destroyWindow('Manual Labeling')
         except Empty:
             continue
-        # process_frame(frame)
     
-    clean_up_resources() # clean up resources
-    flush_queue(QUEUE)   # flush QUEUE instance
+    clean_up_resources()  # clean up resources
+    flush_queue(QUEUE)    # flush QUEUE instance
     print("Main Image Process Thread Exit")
 
 def clean_up_resources():
