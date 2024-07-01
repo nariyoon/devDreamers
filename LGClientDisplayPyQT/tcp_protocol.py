@@ -80,12 +80,18 @@ callback_shutdown_event = 0
 
 # Define for updating image to UI
 uimsg_update_callback = None
+fps_update_callback = None
 
 # Callback function for sending image to UI
 def set_uimsg_update_callback(callback):
     # print("Callback function parameter sent.")
     global uimsg_update_callback
     uimsg_update_callback = callback
+
+# Callback function for seding fps to UI
+def set_fps_update_callback(callback):
+    global fps_update_callback
+    fps_update_callback = callback
 
 # frame_queue와 processed_queue를 tcp_protocol.py로 옮김
 frame_queue = Queue(maxsize=10)
@@ -136,9 +142,10 @@ def tcp_ip_thread(ip, port, shutdown_event):
         try:
             # Receive the message header
             headerData = clientSock.recv(8)
-            if headerData[0] == 0x68 and headerData[1] == 0x65:
-                continue
-            elif len(headerData) != struct.calcsize('II'):
+            # if headerData[0] == 0x68 and headerData[1] == 0x65:
+            #     continue
+            # elif len(headerData) != struct.calcsize('II'):
+            if len(headerData) != struct.calcsize('II'):
                 print("Connection lost.")
                 callback_shutdown_event = 1  # Notify all threads to shut down
                 raise ConnectionError("Connection lost.")
@@ -201,6 +208,7 @@ def tcp_ip_thread(ip, port, shutdown_event):
                     # #print(f"FPS: {fps:.2f}", end='\r')
                     # fps_info.append({"fps": fps})
                     # fps_queue.put(fps_info)
+                    sendFpsToUI(fps)
             else:
                 #print("len_ ", len_, "header type_ ", type_, "data_", int.from_bytes(buffer, byteorder='big'))
                 sendMsgToUI(packedData)
@@ -373,6 +381,13 @@ def sendMsgToUI(msg):
         uimsg_update_callback(msg)
     else:
         print("No callback function set for image update.")
+
+def sendFpsToUI(fps):
+    if fps_update_callback:
+        # print("fps sending... : ", fps)
+        fps_update_callback(fps)
+    else:
+        print("No callback functions set for fps update.")
 
 def buildTargetOrientationThread(shutdown_event):
     while not shutdown_event.is_set(): # and callback_shutdown_event == 0:

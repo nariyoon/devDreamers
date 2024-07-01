@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QCheckBox, Q
 from PyQt5.QtGui import QPixmap, QIntValidator, QIcon, QMovie
 from PyQt5.QtCore import pyqtSignal, pyqtSlot, Qt, QTimer, QMetaObject, Q_ARG # , qRegisterMetaType
 from usermodel.usermodel import UserModel
-from tcp_protocol import sendMsgToCannon, set_uimsg_update_callback #, getFps
+from tcp_protocol import sendMsgToCannon, set_uimsg_update_callback, set_fps_update_callback
 from common import common_start
 from PyQt5 import uic
 from queue import Queue
@@ -121,6 +121,9 @@ class DevWindow(QMainWindow):
     # # Register Disconnect function as pyqtSignal
     disconnectRequested = pyqtSignal()
 
+    # Define a signal that carries a string
+    update_fps_signal = pyqtSignal(str)
+
     # # Define HeartbeatTimer Start and Stop event from other thread
     # startHeartbeat = pyqtSignal(int)  # 타이머 시작 신호
     # stopHeartbeat = pyqtSignal()      # 타이머 중지 신호
@@ -130,6 +133,7 @@ class DevWindow(QMainWindow):
 
         # # Event to signal transmitting disconnect by pyqtSignal because of callback transaction
         self.disconnectRequested.connect(self.handle_disconnect)
+        self.update_fps_signal.connect(self.update_fps)
 
 		# Event to signal the threads to shut down
         self.shutdown_event = threading.Event()        
@@ -218,6 +222,7 @@ class DevWindow(QMainWindow):
         self.checkBoxLaserEnable.clicked.connect(self.toggle_laser)
         self.buttonCalibrate.clicked.connect(self.toggle_calibrate)
         self.buttonStart.clicked.connect(self.send_autoengage_start)
+
 
         # direction buttons
         # Current file path of script of remote.ui file
@@ -308,9 +313,9 @@ class DevWindow(QMainWindow):
         self.pictureBox.setAlignment(Qt.AlignCenter)
         self.layeredQVBox.addWidget(self.pictureBox)
 
-        # # fps 
-        # self.fps = QLabel("Average FPS : N/A", self)
-        # self.layeredQVBox.addWidget(self.fps)
+        # fps 
+        self.fps = QLabel("Average FPS : N/A", self)
+        self.layeredQVBox.addWidget(self.fps)
 
         self.overlayWidget.setLayout(self.layeredQVBox)
 
@@ -408,10 +413,12 @@ class DevWindow(QMainWindow):
         ###########################################
         ## 2안 : Switching Start to Stop         ##
         ###########################################
+        print("Auto Engage Button Pushed")
         char_array = self.get_char_array_autoengage_from_text(self.editEngageOrder)
         self.send_target_order_to_server(char_array)
 
         current_text = self.buttonStart.text()
+        print("Auto Engage Button Pushed : ", current_text)
         if current_text == "START":
             self.buttonStart.setText('STOP')  # Update button text to "STOP"
             self.log_message(f"Auto Engage Fire Started: {self.editEngageOrder}")
@@ -512,10 +519,10 @@ class DevWindow(QMainWindow):
         self.editPreArmCode.setEnabled(True if connected else False)
         self.buttonConnect.setEnabled(False if connected else True)
         self.buttonDisconnect.setEnabled(True if connected else False)
-        self.buttonPreArmEnable.setEnabled(True if connected else False)
+        # self.buttonPreArmEnable.setEnabled(True if connected else False)
   
     def updateModeUI(self):
-        if self.RcvStateCurr == ST_SAFE:
+        if (self.RcvStateCurr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_SAFE:
         # if self.currnet_state == self.State.SAFE:
             self.comboBoxSelectMode.setEnabled(False)
             self.editPreArmCode.setEnabled(True)
@@ -523,21 +530,21 @@ class DevWindow(QMainWindow):
             self.checkBoxLaserEnable.setEnabled(False)
             self.buttonCalibrate.setEnabled(False)
         # elif self.currnet_state == self.State.PREARMED:
-        elif self.RcvStateCurr == ST_PREARMED:
+        elif (self.RcvStateCurr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_PREARMED:
             self.comboBoxSelectMode.setEnabled(True)
             self.editPreArmCode.setEnabled(False)
             self.buttonPreArmEnable.setText('SAFE')
             self.checkBoxLaserEnable.setEnabled(False)
             self.buttonCalibrate.setEnabled(False)
         # elif self.currnet_state == self.State.ARMED_MANUAL:
-        elif self.RcvStateCurr == ST_ARMED_MANUAL:
+        elif (self.RcvStateCurr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_ARMED_MANUAL:
             self.comboBoxSelectMode.setEnabled(True)
             self.editPreArmCode.setEnabled(False)
             self.buttonPreArmEnable.setText('SAFE')
             self.checkBoxLaserEnable.setEnabled(True)
             self.buttonCalibrate.setEnabled(True)
         # elif self.currnet_state == self.State.AUTO_ENGAGE:
-        elif self.RcvStateCurr == ST_AUTO_ENGAGE:
+        elif (self.RcvStateCurr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_AUTO_ENGAGE:
             self.comboBoxSelectMode.setEnabled(True)
             self.editPreArmCode.setEnabled(False)
             self.buttonPreArmEnable.setText('SAFE')
@@ -593,10 +600,12 @@ class DevWindow(QMainWindow):
                     state_int |= ST_LASER_ON
                 else:
                     state_int |= (ST_ARMED_MANUAL|ST_LASER_ON)
+                print("Current LASER_ON Status : ", state_int)
                 self.send_state_change_request_to_server(state_int)
             else:
                 # state_int should be 8
                 state_int &= ST_CLEAR_LASER_MASK
+                print("Current LASER_OFF Status : ", state_int)
                 self.send_state_change_request_to_server(state_int)
 
         except Exception as e:
@@ -786,12 +795,13 @@ class DevWindow(QMainWindow):
     ########################################################################
     # Update Current System State
     def updateSystemState(self):
-        self.log_message("Called updateSystemState Function!!_")
+        # self.log_message("Called updateSystemState Function!!_")
         if isinstance(self.RcvStateCurr, bytes):
             state_int = int.from_bytes(self.RcvStateCurr, byteorder='little')
         else:
             state_int = self.RcvStateCurr
 
+        print("updateSystemState(Erase Additional Mode) : ", state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK)
         if (state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_UNKNOWN:
             self.labelState.setText("UNKNOWN")
             self.log_message(f"MT_STATE : UNKNOWN_{state_int}")
@@ -946,6 +956,19 @@ class DevWindow(QMainWindow):
             print("Exception Message Received", type_msg)
             print("MT_EXCEPTION Received :", ' '.join(f'0x{byte:02x}' for byte in message))
 
+    ###################################################################
+    # callback_fps : Print fps in MainWnd
+    ###################################################################
+    def callback_fps(self, rcvfps):
+        # print("fps updated : ", rcvfps)
+        fps_text = f"Average FPS : {rcvfps:.2f}"
+        # self.fps = rcvfps
+        self.update_fps_signal.emit(fps_text)
+
+    @pyqtSlot(str)
+    def update_fps(self, fps_text):
+        self.fps.setText(fps_text)
+
     # Using heartbeat timer, in order to detect the robot control sw to set abnormal state
     def HeartBeatTimer_event(self):
         self.log_message("Attempting to reconnect...")
@@ -1009,8 +1032,9 @@ class DevWindow(QMainWindow):
         if (self.is_client_connected() and 
             (self.RcvStateCurr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK == ST_ARMED_MANUAL)):
             print("Pressed CT_FIRE_START")
-            for _ in range(5):
+            for _ in range(3):
                 self.set_command(CT_FIRE_START)
+                time.sleep(0.01)
             self.set_command(CT_FIRE_STOP)
         else:
             print("Blocking to press CT_FIRE")
@@ -1042,8 +1066,11 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     mainWin = DevWindow()
 
-    # Set the callback function for image update
+    # Set the callback function for received message update
     set_uimsg_update_callback(mainWin.callback_msg)
+    # Set the callback function for fps update
+    set_fps_update_callback(mainWin.callback_fps)
+
 
     mainWin.show()
     sys.exit(app.exec_())
