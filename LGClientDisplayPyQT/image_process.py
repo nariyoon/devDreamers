@@ -223,7 +223,7 @@ def image_processing_thread(QUEUE, shutdown_event, form_instance):
 
     while not shutdown_event.is_set():
         try:
-            time.sleep(0.01)  # Tuning point
+            # time.sleep(0.01)  # Tuning point
             frame = QUEUE.get(timeout=1)
             
             # if frame is None:  # 종료 신호로 None 사용 가능
