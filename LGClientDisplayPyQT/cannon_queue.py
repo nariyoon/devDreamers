@@ -22,6 +22,6 @@ class OverwritingQueue(Queue):
                 self.get_nowait()
 
 # Save result data
-target_queue = OverwritingQueue(maxsize=2)
-box_queue = OverwritingQueue(maxsize=2)
+target_queue = OverwritingQueue(maxsize=1)
+box_queue = OverwritingQueue(maxsize=1)
 fps_queue = OverwritingQueue(maxsize=1)

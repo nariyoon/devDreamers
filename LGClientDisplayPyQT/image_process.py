@@ -15,7 +15,7 @@ from filterpy.kalman import KalmanFilter
 import copy
 import torch
 import mediapipe as mp
-
+import psutil
 from cannon_queue import *
 
 # Add the parent directory of `image_algo` to sys.path
@@ -227,7 +227,6 @@ def image_processing_thread(QUEUE, shutdown_event, form_instance):
     hands = mp_hands.Hands()
     mp_drawing = mp.solutions.drawing_utils
 
-    import psutil
     p = psutil.Process(os.getpid())
     p.nice(psutil.REALTIME_PRIORITY_CLASS)
 
@@ -237,6 +236,7 @@ def image_processing_thread(QUEUE, shutdown_event, form_instance):
             imageMat = cv2.imdecode(np.frombuffer(frame, dtype=np.uint8), cv2.IMREAD_COLOR)
 
             models = form_instance.get_img_model()
+            # print(f"models {models}")
             if models is None:
                 continue
 

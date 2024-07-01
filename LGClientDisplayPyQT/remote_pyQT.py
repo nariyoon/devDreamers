@@ -9,7 +9,7 @@ from enum import Enum
 import numpy as np
 from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QCheckBox, QLabel, QLineEdit, QTextEdit, QVBoxLayout, QGridLayout, QWidget, QMessageBox
 from PyQt5.QtGui import QPixmap, QIntValidator, QIcon, QMovie
-from PyQt5.QtCore import pyqtSignal, pyqtSlot, Qt, QTimer, QMetaObject, Q_ARG # , qRegisterMetaType
+from PyQt5.QtCore import pyqtSignal, pyqtSlot, Qt, QTimer, QMetaObject, Q_ARG, QObject
 from usermodel.usermodel import UserModel
 from tcp_protocol import sendMsgToCannon, set_uimsg_update_callback, set_fps_update_callback
 from common import common_start
@@ -113,7 +113,7 @@ class DevWindow(QMainWindow):
   	# Define Image thread to separate
     image_received = pyqtSignal(bytes) # Sending image bytes
     rcv_state_changed = pyqtSignal(int) # Add a signal to emit RcvStateCurr changes
-    model_changed = pyqtSignal(int) # Sending selected model integer value to image_ui
+    model_changed = pyqtSignal(str) # Sending selected model integer value to image_ui
 
     # Define a signal to emit log messages
     log_signal = pyqtSignal(str)
@@ -140,7 +140,7 @@ class DevWindow(QMainWindow):
 
         # Define three models to expand extensibility
         self.img_model_global = init_image_processing_model()
-        self.selected_model = None
+        self.selected_model = self.img_model_global[0]
 
         # Starting the Image Processing Thread
         self.image_processing_thread = ImageProcessingThread()
@@ -275,8 +275,10 @@ class DevWindow(QMainWindow):
 
     def get_img_model(self):
         if self.img_model_global and len(self.img_model_global) > 0:
-            self.selected_model = self.img_model_global[0]  # Assign the first model in the list to selected_model
-            self.model_changed.emit(self.selected_model)
+            # set default
+            # self.selected_model = self.img_model_global[0]
+            model_name = self.selected_model.get_name()
+            self.model_changed.emit(model_name)
             return self.selected_model
         else:
             print("Model list is empty or not initialized.")
@@ -443,7 +445,8 @@ class DevWindow(QMainWindow):
     def on_combobox_changed_algorithm(self, index):
         if 0 <= index < len(self.img_model_global):
             self.selected_model = self.img_model_global[index]
-            self.model_changed.emit(self.selected_model)
+            model_name = self.selected_model.get_name()
+            self.model_changed.emit(model_name)
             print(f"Model selected: {self.img_model_global[index].get_name()}")
             # print(f"on_combobox_changed_algorithm... SELECTED: {self.img_model_global[index].get_name()}")
         else:
