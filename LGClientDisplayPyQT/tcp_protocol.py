@@ -244,11 +244,13 @@ def safe_send_data(data):
             print(f"Failed to send data: {e}")
     else:
         print("Socket is not connected.")
-def sendEmptyMsg(target):
+
+def sendEmptyMsg(msg):
+    global clientSock
     data = bytearray()
-    data.extend(struct.pack('>II', 1, target))
+    data.extend(struct.pack('>II', 1, msg))
     data.append(255)
-    print("sendEmptyMsg : {target}")
+    print("sendEmptyMsg : ", msg)
     #safe_send_data(data)
     clientSock.sendall(data)
 
@@ -272,6 +274,7 @@ def buildTagetOrientation(msg):
             for target in targetLabelData['target_info']:
                 label = target.get('label', 'N/A')
                 if buffer[i] == int(label):
+                    print("target is found: ", int(label))
                     detectCnt = 0
                     lastPan = -99.99
                     lastTilt = -99.99
@@ -306,7 +309,8 @@ def buildTagetOrientation(msg):
                             #print(center)
                             continue
 
-                        if sameCoordinateCnt > 500:
+                        if sameCoordinateCnt > 300:
+                            print("same coordinate count over 300")
                             break
 
                         lastX = centerX
@@ -340,6 +344,9 @@ def buildTagetOrientation(msg):
                     sendEmptyMsg(MT_FIRE)
 
                     break
+                else:
+                    print("can not find target")
+
         sendEmptyMsg(MT_COMPLETE)
 	    #Below is sample to let go aim to the center(if it can't find the target)
         sendEmptyMsg(MT_GO_CENTER)
