@@ -118,17 +118,17 @@ class DevWindow(QMainWindow):
     # Define a signal to emit log messages
     log_signal = pyqtSignal(str)
 
-    # Register Disconnect function as pyqtSignal
+    # # Register Disconnect function as pyqtSignal
     disconnectRequested = pyqtSignal()
 
-    # Define HeartbeatTimer Start and Stop event from other thread
-    startHeartbeat = pyqtSignal(int)  # 타이머 시작 신호
-    stopHeartbeat = pyqtSignal()      # 타이머 중지 신호
+    # # Define HeartbeatTimer Start and Stop event from other thread
+    # startHeartbeat = pyqtSignal(int)  # 타이머 시작 신호
+    # stopHeartbeat = pyqtSignal()      # 타이머 중지 신호
 
     def __init__(self):
         super().__init__()
 
-        # Event to signal transmitting disconnect by pyqtSignal because of callback transaction
+        # # Event to signal transmitting disconnect by pyqtSignal because of callback transaction
         self.disconnectRequested.connect(self.handle_disconnect)
 
 		# Event to signal the threads to shut down
@@ -169,16 +169,16 @@ class DevWindow(QMainWindow):
         app.setStyleSheet(qdarktheme.load_stylesheet())
         self.initUI()
 
-        self.HeartbeatTimer = QTimer(self)
-        self.HeartbeatTimer.timeout.connect(self.HeartBeatTimer_event)
-        # Connect signal and slot for HeartTimer
-        self.startHeartbeat.connect(self.start_heartbeat_timer)
-        self.stopHeartbeat.connect(self.HeartbeatTimer.stop)
+        # self.HeartbeatTimer = QTimer(self)
+        # self.HeartbeatTimer.timeout.connect(self.HeartBeatTimer_event)
+        # # Connect signal and slot for HeartTimer
+        # self.startHeartbeat.connect(self.start_heartbeat_timer)
+        # self.stopHeartbeat.connect(self.HeartbeatTimer.stop)
 
         self.show()
 
-    def start_heartbeat_timer(self, interval):
-        self.HeartbeatTimer.start(interval)
+    # def start_heartbeat_timer(self, interval):
+    #     self.HeartbeatTimer.start(interval)
         
     def update_model_combobox(self):
         # Clear existing items
@@ -825,7 +825,7 @@ class DevWindow(QMainWindow):
         if socketstate == SOCKET_SUCCESS:
             self.SocketState = SOCKET_SUCCESS
             self.log_message("Robot is connected successfully")
-            self.stopHeartbeat.emit()  # 메인 스레드에서 타이머 중지
+            # self.stopHeartbeat.emit()  # 메인 스레드에서 타이머 중지
 
             ip = self.editIPAddress.text()
             port = int(self.editTCPPort.text())
@@ -850,11 +850,12 @@ class DevWindow(QMainWindow):
             self.disconnectRequested.emit()
             # self.buttonConnect.setEnabled(True)
             # self.buttonDisconnect.setEnabled(False)
-            self.log_message("Robot's connection is lost - Starting retry to connect....")
+            self.log_message("Robot's connection is lost.")
+            # self.log_message("Robot's connection is lost - Starting retry to connect....")
             # self.HeartBeatTimer_event()
-            if not self.HeartbeatTimer.isActive():
-                # self.HeartbeatTimer.start(10000)
-                self.startHeartbeat.emit(10000)  # HeartbeatTimer starts
+            # if not self.HeartbeatTimer.isActive():
+            #     # self.HeartbeatTimer.start(10000)
+            #     self.startHeartbeat.emit(10000)  # HeartbeatTimer starts
 
     ###################################################################
     # Image presentation showing thread close
@@ -948,16 +949,16 @@ class DevWindow(QMainWindow):
     # Using heartbeat timer, in order to detect the robot control sw to set abnormal state
     def HeartBeatTimer_event(self):
         self.log_message("Attempting to reconnect...")
-        # if self.check_server(self.editIPAddress.text(), self.editTCPPort.text()):
-        ip = self.editIPAddress.text()
-        port = int(self.editTCPPort.text())
-        if self.check_server(ip, port):
-            print("Server is up! Stopping the timer.")
-            self.HeartbeatTimer.stop()
-            # Theads.settimeout(5)  # 5 seconds timeout
-            self.connect()
-        else:
-            print("Server check failed, will retry in 10 seconds.")
+        # # if self.check_server(self.editIPAddress.text(), self.editTCPPort.text()):
+        # ip = self.editIPAddress.text()
+        # port = int(self.editTCPPort.text())
+        # if self.check_server(ip, port):
+        #     print("Server is up! Stopping the timer.")
+        #     self.HeartbeatTimer.stop()
+        #     # Theads.settimeout(5)  # 5 seconds timeout
+        #     self.connect()
+        # else:
+        #     print("Server check failed, will retry in 10 seconds.")
 
     def check_server(self, ip, port):
         # Simple TCP socket to check the server

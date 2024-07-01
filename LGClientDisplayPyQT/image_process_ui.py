@@ -93,29 +93,29 @@ class ImageProcessingThread(QThread):
                     except Empty:
                         pass
 
-                    # Create a FPS Text to modify the QPixmap
-                    # painter = QPainter(pixmap)
-                    try:
-                        fps_data = fps_queue.get_nowait()
-                        for fps_info in fps_data:
-                            rt_fps = fps_info['fps']
-                        # Set the pen color to black and make the text bold
-                        pen = QPen(QColor(0, 0, 0))  # Black color
-                        painter.setPen(pen)
-                        font = painter.font()
-                        font.setPixelSize(20)  # Adjust font size
-                        font.setBold(True)  # Set the font to be bold
-                        painter.setFont(font)
+                    # # Create a FPS Text to modify the QPixmap
+                    # # painter = QPainter(pixmap)
+                    # try:
+                    #     fps_data = fps_queue.get_nowait()
+                    #     for fps_info in fps_data:
+                    #         rt_fps = fps_info['fps']
+                    #     # Set the pen color to black and make the text bold
+                    #     pen = QPen(QColor(0, 0, 0))  # Black color
+                    #     painter.setPen(pen)
+                    #     font = painter.font()
+                    #     font.setPixelSize(20)  # Adjust font size
+                    #     font.setBold(True)  # Set the font to be bold
+                    #     painter.setFont(font)
 
-                        # Text to display
-                        display_text = f"AVG FPS : {rt_fps:.2f}" 
-                        text_position = QPoint(10, h - 30)  # Adjust coordinates for the bottom left
+                    #     # Text to display
+                    #     display_text = f"AVG FPS : {rt_fps:.2f}" 
+                    #     text_position = QPoint(10, h - 30)  # Adjust coordinates for the bottom left
 
-                        # Draw text at specified position
-                        painter.drawText(text_position, display_text)
+                    #     # Draw text at specified position
+                    #     painter.drawText(text_position, display_text)
 
-                    except Empty:
-                        pass
+                    # except Empty:
+                    #     pass
 
                     painter.end()
                     self.image_processed.emit(pixmap)
