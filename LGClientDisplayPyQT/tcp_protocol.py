@@ -304,14 +304,14 @@ def buildTagetOrientation(msg):
                             else:
                                 centerY = value
 
+                        if sameCoordinateCnt > 300:
+                            print("same coordinate count over 300")
+                            break
+
                         if lastX == centerX and lastY == centerY:
                             sameCoordinateCnt = sameCoordinateCnt + 1
                             #print(center)
                             continue
-
-                        if sameCoordinateCnt > 300:
-                            print("same coordinate count over 300")
-                            break
 
                         lastX = centerX
                         lastY = centerY
@@ -349,6 +349,7 @@ def buildTagetOrientation(msg):
 
         sendEmptyMsg(MT_COMPLETE)
 	    #Below is sample to let go aim to the center(if it can't find the target)
+        time.sleep(3)
         sendEmptyMsg(MT_GO_CENTER)
     else:
         print("no target_info")
