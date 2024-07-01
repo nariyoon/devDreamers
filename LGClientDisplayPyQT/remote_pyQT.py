@@ -228,26 +228,18 @@ class DevWindow(QMainWindow):
         # Current file path of script of remote.ui file
         # ui_file = 'new_remote.ui'
         # ui_mainwindow = uic.loadUi(ui_file, self)
-        script_dir = os.path.dirname(os.path.realpath(__file__))
-        resources_path = os.path.join(script_dir, 'resources/')
-        # self.buttonUp.setIcon(QIcon('resources/arrow_up.png'))
-        self.buttonUp.setIcon(QIcon(os.path.join(resources_path, 'arrow_up.png')))
+        # script_dir = os.path.dirname(os.path.realpath(__file__))
+        # resources_path = os.path.join(script_dir, 'resources/')
         self.buttonUp.setStyleSheet("border: none;")
         self.buttonUp.clicked.connect(self.clicked_command_up)
-        # self.buttonDown.setIcon(QIcon('resources/arrow_down.png'))
-        self.buttonDown.setIcon(QIcon(os.path.join(resources_path, 'arrow_down.png')))
         self.buttonDown.setStyleSheet("border: none;")
         self.buttonDown.clicked.connect(self.clicked_command_down)
-        # self.buttonRight.setIcon(QIcon('resources/arrow_right.png'))
-        self.buttonRight.setIcon(QIcon(os.path.join(resources_path, 'arrow_right.png')))
         self.buttonRight.setStyleSheet("border: none;")
         self.buttonRight.clicked.connect(self.clicked_command_right)
-        # self.buttonLeft.setIcon(QIcon('resources/arrow_left.png'))
-        self.buttonLeft.setIcon(QIcon(os.path.join(resources_path, 'arrow_left.png')))
+
         self.buttonLeft.setStyleSheet("border: none;")
         self.buttonLeft.clicked.connect(self.clicked_command_left)
-        # self.buttonFire.setIcon(QIcon('resources/exit.png'))
-        self.buttonFire.setIcon(QIcon(os.path.join(resources_path, 'exit.png')))
+
         self.buttonFire.setStyleSheet("border: none;")
         self.buttonFire.clicked.connect(self.clicked_command_fire)
 
@@ -322,9 +314,31 @@ class DevWindow(QMainWindow):
         self.overlayWidget.setLayout(self.layeredQVBox)
 
     def setHitResult(self, result, targetNumber): 
-        result = 'HIT!!' if result else 'MISS'
-        self.hitResult.setText(result)
-        self.hitResultHistory.append(f'{targetNumber}: {result}')
+        if result:
+            result_text = 'HIT'
+            text_color = 'red'
+            history_color = 'red'  # Example color for HIT in history
+            font_size = '26px'  # Example font size for HIT in history
+            font_weight = 'bold'  # Example font weight for HIT in history
+        else:
+            result_text = 'MISS'
+            text_color = 'green'
+            history_color = 'green'  # Example color for MISS in history
+            font_size = '24px'  # Example font size for MISS in history
+            font_weight = 'normal'  # Example font weight for MISS in history
+        
+
+        history_text = f'<font color="{history_color}" style="font-weight: {font_weight};">{targetNumber} >> {result_text}</font>'
+
+        hit_result_text = f'<font color="{history_color}" size="{font_size}" style="font-weight: {font_weight};"> {targetNumber}: {result_text}</font>'
+
+        # self.hitResult.setText(history_text)
+        # self.hitResult.setStyleSheet(f'color: {text_color}; font-weight: bold; font-size: 18px;')
+        
+        # Append to hitResultHistory with colored text
+        history_text = f'<font color="{history_color}" style="font-weight: {font_weight};">{targetNumber} >> {result_text}</font>'
+        self.hitResultHistory.append(history_text)
+
 
     def validCheckIpAndPort(self,text): 
         self.buttonConnect.setEnabled(False)
