@@ -348,11 +348,8 @@ def buildTagetOrientation(msg):
                     sendEmptyMsg(MT_FIRE)
                     targetStatus = AFTER_TARGET
                     break
-                else:
-                    print("can not find target")
 
         sendEmptyMsg(MT_COMPLETE)
-	    #Below is sample to let go aim to the center(if it can't find the target)
         time.sleep(3)
         sendEmptyMsg(MT_GO_CENTER)
         autoEngageStop = False
@@ -372,8 +369,8 @@ def sendMsgToCannon(msg):
         print("type is MT_TARGET_SEQUENCE: ", value)
         task_queue.put(value)
     elif typeInt == MT_COMMANDS:
-        if value == 0xff:
-            print("stop")
+        valueInt = int.from_bytes(value, byteorder='big')
+        if valueInt == 255:
             autoEngageStop = True
         else:
             clientSock.sendall(msg)
