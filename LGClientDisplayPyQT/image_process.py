@@ -269,7 +269,8 @@ def image_processing_thread(QUEUE, shutdown_event, form_instance):
                     "label": label,
                     "center": [center_x, center_y],
                     "bbox": [x1, y1, x2, y2],
-                    "size": [width, height]
+                    "size": [width, height],
+                    "area" : area
                 })
 
                 box_info.append({
