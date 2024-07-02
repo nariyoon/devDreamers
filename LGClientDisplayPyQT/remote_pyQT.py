@@ -17,7 +17,7 @@ from common import common_start
 from PyQt5 import uic
 from queue import Queue
 from image_process_ui import ImageProcessingThread
-from image_process import init_image_processing_model
+from image_process import init_image_processing_model, init_filter_models
 import os
 import qdarktheme
 from image_process import get_result_model
@@ -145,6 +145,10 @@ class DevWindow(QMainWindow):
         # Define three models to expand extensibility
         self.img_model_global = init_image_processing_model()
         self.selected_model = self.img_model_global[0]
+
+
+
+        self.img_filter_global = init_filter_models()
 
         # Starting the Image Processing Thread
         self.image_processing_thread = ImageProcessingThread()

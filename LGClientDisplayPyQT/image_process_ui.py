@@ -6,7 +6,8 @@ import cv2
 import numpy as np
 import time
 from queue import Empty
-from cannon_queue import box_queue, target_queue
+from cannon_queue import *
+from tcp_protocol import getTargetStatus, getTargetNum
 
 class ImageProcessingThread(QThread):
     image_processed = pyqtSignal(QPixmap)
@@ -65,6 +66,11 @@ class ImageProcessingThread(QThread):
                         pen_color = QColor(173, 255, 47)  # Default Green
 
                     # Draw boxes from box_info
+                    targetNum = getTargetNum()
+                    targetStatus = getTargetStatus()
+                    if targetStatus == 3:
+                        self.prev_data = []
+
                     try:
                         result_data = box_queue.get_nowait()
                         self.prev_data = result_data.copy()
@@ -101,6 +107,16 @@ class ImageProcessingThread(QThread):
                         painter.setPen(QColor(0, 0, 0))  # Black text
                         painter.drawText(x1 + 2, y1 - 2, label_text)
 
+                         # Draw aiming circle and crosshair for targetNum
+                        if label == str(targetNum):
+                            center_x = (x1 + x2) / 2
+                            center_y = (y1 + y2) / 2
+                            radius = int(min(x2 - x1, y2 - y1) * 1)  # Increase size of the targeting circle
+                            aim_pen = QPen(QColor(0, 255, 0), 3)
+                            painter.setPen(aim_pen)
+                            painter.drawEllipse(int(center_x) - radius, int(center_y) - radius, 2 * radius, 2 * radius)
+                            painter.drawLine(int(center_x) - radius, int(center_y), int(center_x) + radius, int(center_y))
+                            painter.drawLine(int(center_x), int(center_y) - radius, int(center_x), int(center_y) + radius)
                     painter.end()
                     self.image_processed.emit(pixmap)
 

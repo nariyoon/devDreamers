@@ -449,6 +449,6 @@ def getTargetStatus():
     global targetStatus
     return targetStatus
 
-def getTargetStatus():
+def getTargetNum():
     global targetNum
     return targetNum
