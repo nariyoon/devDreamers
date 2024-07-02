@@ -438,15 +438,15 @@ class DevWindow(QMainWindow):
         if current_text == "Start":
             self.buttonStart.setText('Stop')  # Update button text to "STOP"
             # self.log_message(f"Auto Engage Fire Started: {self.editEngageOrder}")
-            char_array = self.get_char_array_autoengage_from_text(self.editEngageOrder)
-            self.send_target_order_to_server(char_array)
+            char_array = self.get_char_array_autoengage_from_text(self.editEngageOrder)         ####################3
+            self.send_target_order_to_server(char_array)                                        ####################3
             self.log_message(f"Auto Engage Fire Started!") # ," ".join(f'0x{byte:02x}' for byte in char_array))
             # self.set_command(CT_FIRE_START)  # Signal to start auto engagement
             
         elif current_text == "Stop":
             self.buttonStart.setText('Start')  # Update button text back to "START"
             self.log_message(f"Auto Engage Fire Stopping") # : {self.editEngageOrder}")
-            self.set_command(CT_AUTO_ENGAGE_CANCEL)  # Signal to stop auto engagement
+            self.set_command(CT_AUTO_ENGAGE_CANCEL)  # Signal to stop auto engagement           ####################3
             # self.send_state_change_request_to_server(ST_SAFE)  # Assuming 'ST_SAFE' is the state to return to
 
     # def on_combobox_changed_algorithm(self, index):
@@ -542,6 +542,7 @@ class DevWindow(QMainWindow):
         # self.currnet_state = self.State.UNKNOWN
         self.RcvStateCurr = ST_UNKNOWN
         self.setAllUIEnabled(False, False)
+        self.updateSystemState()
         self.shutdown_event.clear()
 
     def setAllUIEnabled(self, connected, preArmed):
@@ -557,6 +558,7 @@ class DevWindow(QMainWindow):
         # self.buttonPreArmEnable.setEnabled(True if connected else False)
   
     def updateModeUI(self):
+        print("updateModeUI self.RcvStateCurr : ", self.RcvStateCurr)
         if (self.RcvStateCurr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_SAFE:
         # if self.currnet_state == self.State.SAFE:
             self.comboBoxSelectMode.setEnabled(False)
@@ -590,12 +592,13 @@ class DevWindow(QMainWindow):
             self.buttonPreArmEnable.setText('SAFE')
             self.checkBoxLaserEnable.setEnabled(False)
             self.buttonCalibrate.setEnabled(False)
-            self.buttonStart.setText("Start")
+            # self.buttonStart.setText("Start")
+        # elif self.currnet_state == self.State.UNKNOWN:
         else:
             self.comboBoxSelectMode.setEnabled(False)
             # self.comboBoxSelectMode.setCurrentIndex(0)
-            self.editPreArmCode.setEnabled(True) 
-            self.buttonPreArmEnable.setText('PRE-ARMED')
+            self.editPreArmCode.setEnabled(False) 
+            self.buttonPreArmEnable.setText('PRE-ARM')
             self.checkBoxLaserEnable.setEnabled(False)
             self.buttonCalibrate.setEnabled(False)
             self.buttonStart.setText("Start")
