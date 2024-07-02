@@ -54,6 +54,13 @@ TARGET_FIRING = 3
 WIDTH = 960
 HEIGHT = 544
 
+# stage by target distance
+TARGET_STATGE_1 = 1 # 13 inch / area over 6000
+TARGET_STATGE_2 = 2 # 18 inch / area 3500 - 6000
+TARGET_STATGE_3 = 3 # 23 - 28 inch / area 1000 - 3500
+TARGET_STATGE_4 = 4 # 34 - 35 inch / area 600 - 1000
+TARGET_STATGE_5 = 5 # 36 inch / area under 600
+
 # Define message structures
 class TMesssageHeader:
     def __init__(self, len_, type_):
@@ -272,26 +279,34 @@ def buildTagetOrientation(msg):
                     pan = -1.5
                     tilt = -1.5
                     sameCoordinateCnt = 0
+                    findCnt = 0
                     print("move to target: ", targetNum)
                     while detectCnt < 1:
                         setTargetStatus(TARGET_BEFORE_FIRE)
-                        time.sleep(0.01)
+                        time.sleep(0.03)
                         if autoEngageStop == True:
                             print("Stop ongoing fire target")
                             break
                         data = bytearray()
                         targetCenterData = get_result_model()
-                        findTarget = 0
+                        findTarget = False
                         for target in targetCenterData['target_info']:
                             label = target.get('label', 'N/A')
                             if buffer[i] == int(label):
+                                area = target.get('area', 0)
                                 center = target.get('center', [0, 0])
-                                findTarget += 1
+                                #print("center: ", center)
+                                findTarget = True
+                                findCnt = 0
                                 break
-
-                        if findTarget > 15:
-                            print("target is not found in while loop")
-                            #break
+                        
+                        if findTarget == False:
+                            findCnt += 1
+                            if findCnt > 15:
+                                print("target is not found in while loop")
+                                break
+                            else:
+                                continue
 
                         centerX = 0
                         centerY = 0
@@ -321,19 +336,29 @@ def buildTagetOrientation(msg):
 
                         data.extend(struct.pack('>II', 8, MT_TARGET_DIFF))
 
-                        if centerX > 500: # dectect right side
-                            print("right side X")
-                            panError = (centerX + 10) - WIDTH/2
+                        if getTargetStage(area) == TARGET_STATGE_1:
+                            panError = (centerX - 20) - WIDTH/2
+                            tiltError = (centerY - 40) - HEIGHT/2
+                        elif getTargetStage(area) == TARGET_STATGE_2:
+                            panError = (centerX - 20) - WIDTH/2
+                            tiltError = (centerY - 40) - HEIGHT/2
+                        elif getTargetStage(area) == TARGET_STATGE_3:
+                            panError = (centerX - 20) - WIDTH/2
+                            tiltError = (centerY - 40) - HEIGHT/2
+                        elif getTargetStage(area) == TARGET_STATGE_4:
+                            panError = (centerX - 20) - WIDTH/2
+                            tiltError = (centerY - 40) - HEIGHT/2
+                        elif getTargetStage(area) == TARGET_STATGE_5:
+                            panError = (centerX - 10) - WIDTH/2
+                            tiltError = (centerY - 35) - HEIGHT/2
                         else:
                             panError = (centerX - 20) - WIDTH/2
+                            tiltError = (centerY - 40) - HEIGHT/2
+
                         pan = pan - panError/75
                         convertValue = send_float(pan)
                         data.extend(struct.pack('>I', convertValue))
 
-                        if centerX > 500: # dectect right side
-                            tiltError = (centerY - 50) - HEIGHT/2 # 70
-                        else:
-                            tiltError = (centerY - 40) - HEIGHT/2 # 70
                         tilt = tilt - tiltError/75
                         convertValue = send_float(tilt)
                         data.extend(struct.pack('>I', convertValue))
@@ -351,10 +376,12 @@ def buildTagetOrientation(msg):
 
                     print("sameCoordinateCnt: ", sameCoordinateCnt)
                     sameCoordinateCnt = 0
-                    setTargetStatus(TARGET_FIRING)
-                    sendEmptyMsg(MT_FIRE)
-                    time.sleep(0.1)
-                    # targetStatus = AFTER_TARGET
+                    if findCnt == 0:
+                        setTargetStatus(TARGET_FIRING)
+                        sendEmptyMsg(MT_FIRE)
+                        time.sleep(0.1)
+                        # targetStatus = AFTER_TARGET
+
                     break
 
         sendEmptyMsg(MT_COMPLETE)
@@ -426,7 +453,7 @@ def send_float(number):
     return uint32_val
 
 def compareCoordinate(lastPan, lastTilt, pan, tilt):
-    print(lastPan, " ", pan, " ", lastTilt, " ", tilt)
+    #print(lastPan, " ", pan, " ", lastTilt, " ", tilt)
 
     x = abs(lastPan - pan)
     y = abs(lastTilt - tilt)
@@ -452,3 +479,24 @@ def getTargetStatus():
 def getTargetStatus():
     global targetNum
     return targetNum
+
+def getTargetStage(area):
+    # TARGET_STATGE_1 = 1 # 13 inch / area over 6000
+    # TARGET_STATGE_2 = 2 # 18 inch / area 3500 - 6000
+    # TARGET_STATGE_3 = 3 # 23 - 28 inch / area 1000 - 3500
+    # TARGET_STATGE_4 = 4 # 34 - 35 inch / area 600 - 1000
+    # TARGET_STATGE_5 = 5 # 36 inch / area under 600
+    stage = 0
+    if area > 6000:
+        stage = TARGET_STATGE_1
+    elif area < 6000 and area > 3500:
+        stage = TARGET_STATGE_2
+    elif area < 3500 and area > 1000:
+        stage = TARGET_STATGE_3
+    elif area < 1000 and area > 600:
+        stage = TARGET_STATGE_4
+    elif area < 600:
+        stage = TARGET_STATGE_5
+    
+    #print("## stage ", stage, " ", area)
+    return stage
