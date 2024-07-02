@@ -431,19 +431,22 @@ class DevWindow(QMainWindow):
         ## 2안 : Switching Start to Stop         ##
         ###########################################
         print("Auto Engage Button Pushed")
-        char_array = self.get_char_array_autoengage_from_text(self.editEngageOrder)
-        self.send_target_order_to_server(char_array)
+        # char_array = self.get_char_array_autoengage_from_text(self.editEngageOrder)
+        # self.send_target_order_to_server(char_array)
 
         current_text = self.buttonStart.text()
         print("Auto Engage Button Pushed : ", current_text)
         if current_text == "Start":
             self.buttonStart.setText('Stop')  # Update button text to "STOP"
-            self.log_message(f"Auto Engage Fire Started: {self.editEngageOrder}")
+            # self.log_message(f"Auto Engage Fire Started: {self.editEngageOrder}")
+            char_array = self.get_char_array_autoengage_from_text(self.editEngageOrder)
+            self.send_target_order_to_server(char_array)
+            self.log_message(f"Auto Engage Fire Started!") # ," ".join(f'0x{byte:02x}' for byte in char_array))
             # self.set_command(CT_FIRE_START)  # Signal to start auto engagement
             
         elif current_text == "Stop":
             self.buttonStart.setText('Start')  # Update button text back to "START"
-            self.log_message(f"Auto Engage Fire Stopping: {self.editEngageOrder}")
+            self.log_message(f"Auto Engage Fire Stopping") # : {self.editEngageOrder}")
             self.set_command(CT_AUTO_ENGAGE_CANCEL)  # Signal to stop auto engagement
             # self.send_state_change_request_to_server(ST_SAFE)  # Assuming 'ST_SAFE' is the state to return to
 
@@ -949,8 +952,13 @@ class DevWindow(QMainWindow):
             # Update UI and Button related to State
             compared_state = rcv_state & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK
             if compared_state in (ST_PREARMED, ST_AUTO_ENGAGE, ST_ARMED_MANUAL):
+                # Insert for Exception or Completion of Auto Engagement
+                if compared_state == ST_PREARMED:
+                    self.comboBoxSelectMode.setCurrentIndex(0)
                 self.setAllUIEnabled(True, True)
             else :
+                if compared_state in (ST_SAFE, ST_UNKNOWN) :
+                    self.comboBoxSelectMode.setCurrentIndex(0)
                 self.setAllUIEnabled(True, False)
                 
         # 나머지 MT_MSG 들은 byte 배열이 들어오므로 bit -> little 변환이 필요함, 송신도 마찬가지
