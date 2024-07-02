@@ -227,8 +227,15 @@ def image_processing_thread(QUEUE, shutdown_event, form_instance):
     hands = mp_hands.Hands()
     mp_drawing = mp.solutions.drawing_utils
 
+    # 프로세스 우선순위 설정
     p = psutil.Process(os.getpid())
     p.nice(psutil.REALTIME_PRIORITY_CLASS)
+
+    # Target status tracking
+    target_status = {}
+    disappearance_threshold = 3  # Number of frames an object can disappear before being considered hit
+    movement_threshold = 5  # Pixel movement to consider as shaking
+    direction_threshold = 20  # Pixel movement to consider as moving in a direction
 
     while not shutdown_event.is_set():
         try:
@@ -236,7 +243,6 @@ def image_processing_thread(QUEUE, shutdown_event, form_instance):
             imageMat = cv2.imdecode(np.frombuffer(frame, dtype=np.uint8), cv2.IMREAD_COLOR)
 
             models = form_instance.get_img_model()
-            # print(f"models {models}")
             if models is None:
                 continue
 
@@ -269,11 +275,39 @@ def image_processing_thread(QUEUE, shutdown_event, form_instance):
                     "center": [center_x, center_y],
                 })
 
+                # Update target status
+                if label not in target_status:
+                    target_status[label] = {
+                        'disappearance_count': 0,
+                        'last_position': (center_x, center_y),
+                        'movement': 'stationary'
+                    }
+                else:
+                    prev_center_x, prev_center_y = target_status[label]['last_position']
+                    displacement = np.sqrt((center_x - prev_center_x) ** 2 + (center_y - prev_center_y) ** 2)
+
+                    if displacement > movement_threshold:
+                        target_status[label]['movement'] = 'shaking'
+                    elif abs(center_x - prev_center_x) > direction_threshold or abs(center_y - prev_center_y) > direction_threshold:
+                        target_status[label]['movement'] = 'moving'
+                    else:
+                        target_status[label]['movement'] = 'stationary'
+
+                    target_status[label]['last_position'] = (center_x, center_y)
+                    target_status[label]['disappearance_count'] = 0
+
+            # Check for disappeared targets
+            for label in list(target_status.keys()):
+                if not any(t['label'] == label for t in target_info):
+                    target_status[label]['disappearance_count'] += 1
+                    if target_status[label]['disappearance_count'] > disappearance_threshold:
+                        target_status[label]['movement'] = 'hit'
+                else:
+                    target_status[label]['disappearance_count'] = 0
+
             # 성능을 위해 이미지를 RGB로 변환
             image = cv2.cvtColor(imageMat, cv2.COLOR_BGR2RGB)
             results = hands.process(image)
-            # 이미지를 다시 BGR로 변환
-            # image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
             if results.multi_hand_landmarks:
                 for hand_landmarks in results.multi_hand_landmarks:
                     # 랜드마크 좌표로 경계 상자 계산
@@ -292,8 +326,10 @@ def image_processing_thread(QUEUE, shutdown_event, form_instance):
 
             # DATA 딕셔너리에 업데이트
             DATA['target_info'] = target_info
+            # DATA['target_status'] = target_status
 
             box_queue.put(box_info)
+            target_queue.put(target_status)
             set_result_model(DATA)
         except Empty:
             continue

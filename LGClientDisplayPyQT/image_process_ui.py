@@ -6,8 +6,7 @@ import cv2
 import numpy as np
 import time
 from queue import Empty
-from cannon_queue import box_queue
-
+from cannon_queue import box_queue, target_queue
 
 class ImageProcessingThread(QThread):
     image_processed = pyqtSignal(QPixmap)
@@ -24,7 +23,6 @@ class ImageProcessingThread(QThread):
         self.image_data = image_data
 
     def update_selected_model(self, img_process_model):
-        # print(f"update_selected_model {img_process_model}")
         self.img_process_model = img_process_model
 
     @pyqtSlot(int)
@@ -56,6 +54,7 @@ class ImageProcessingThread(QThread):
                     # Draw the crosshair at the specified offset position
                     painter.drawLine(X_correct - crosshair_size, Y_correct, X_correct + crosshair_size, Y_correct)
                     painter.drawLine(X_correct, Y_correct - crosshair_size, X_correct, Y_correct + crosshair_size)
+
                     if self.img_process_model == "YOLOv8":
                         pen_color = QColor(173, 255, 47)  # Green
                     elif self.img_process_model == "TFLite":
@@ -64,12 +63,15 @@ class ImageProcessingThread(QThread):
                         pen_color = QColor(255, 0, 0)  # Red
                     else:
                         pen_color = QColor(173, 255, 47)  # Default Green
+
                     # Draw boxes from box_info
-                    try:                      
+                    try:
                         result_data = box_queue.get_nowait()
+                        target_status = target_queue.get_nowait()  # Get target status data
                         self.prev_data = result_data.copy()
                     except Empty:
                         result_data = self.prev_data
+                        target_status = {}
 
                     for box_info in result_data:
                         x1, y1, x2, y2 = box_info['bbox']
@@ -100,6 +102,17 @@ class ImageProcessingThread(QThread):
                         # Draw label text
                         painter.setPen(QColor(0, 0, 0))  # Black text
                         painter.drawText(x1 + 2, y1 - 2, label_text)
+
+                        # Draw additional information below the box
+                        status_text = target_status.get(label, {}).get('movement', 'unknown')
+                        status_size = painter.fontMetrics().size(0, status_text)
+                        painter.setBrush(QColor(255, 255, 255))
+                        painter.drawRect(x1, y2 + 4, status_size.width() + 4, status_size.height() + 4)
+                        painter.setBrush(Qt.NoBrush)  # Reset brush to no brush
+
+                        painter.setPen(QColor(0, 0, 0))  # Black text
+                        painter.drawText(x1 + 2, y2 + status_size.height() + 2, status_text)
+
                     painter.end()
                     self.image_processed.emit(pixmap)
 
@@ -109,5 +122,3 @@ class ImageProcessingThread(QThread):
         self.running = False
         self.wait()
         print("Image processing UI thread is closed successfully.")
-
-
