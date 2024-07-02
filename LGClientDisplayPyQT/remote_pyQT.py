@@ -7,6 +7,7 @@ import cv2
 import re
 from enum import Enum
 import numpy as np
+import pyqtgraph as pg
 from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QCheckBox, QLabel, QLineEdit, QTextEdit, QVBoxLayout, QGridLayout, QWidget, QMessageBox
 from PyQt5.QtGui import QPixmap, QIntValidator, QIcon, QMovie
 from PyQt5.QtCore import pyqtSignal, pyqtSlot, Qt, QTimer, QMetaObject, Q_ARG, QObject
@@ -124,6 +125,7 @@ class DevWindow(QMainWindow):
 
     # Define a signal that carries a string
     update_fps_signal = pyqtSignal(str)
+    # update_fps_datasig = pyqtSignal(float)
 
     # # Define HeartbeatTimer Start and Stop event from other thread
     # startHeartbeat = pyqtSignal(int)  # 타이머 시작 신호
@@ -135,9 +137,10 @@ class DevWindow(QMainWindow):
         # # Event to signal transmitting disconnect by pyqtSignal because of callback transaction
         self.disconnectRequested.connect(self.handle_disconnect)
         self.update_fps_signal.connect(self.update_fps)
+        # self.update_fps_datasig.connect(self.update_fpsdata)
 
 		# Event to signal the threads to shut down
-        self.shutdown_event = threading.Event()        
+        self.shutdown_event = threading.Event()
 
         # Define three models to expand extensibility
         self.img_model_global = init_image_processing_model()
@@ -307,9 +310,14 @@ class DevWindow(QMainWindow):
         self.pictureBox.setAlignment(Qt.AlignCenter)
         self.layeredQVBox.addWidget(self.pictureBox)
 
-        # fps 
-        # self.fps = QLabel("Average FPS : N/A", self)
-        # self.layeredQVBox.addWidget(self.fps)
+        # # Create a plot widget
+        # self.plot_widget = pg.PlotWidget()
+        # self.layeredQVBox.addWidget(self.plot_widget)
+        # # Initialize data
+        # self.fps_x = list(range(100))
+        # self.fps_y = [0 for _ in range(100)]
+        # # Set up the plot
+        # self.fps_line = self.plot_widget.plot(self.fps_x, self.fps_y, pen=pg.mkPen(color='b', width=2))
 
         self.overlayWidget.setLayout(self.layeredQVBox)
 
@@ -435,7 +443,7 @@ class DevWindow(QMainWindow):
 
         current_text = self.buttonStart.text()
         print("Auto Engage Button Pushed : ", current_text)
-        if current_text == "Start":
+        if current_text == "Fire":
             self.buttonStart.setText('Stop')  # Update button text to "STOP"
             # self.log_message(f"Auto Engage Fire Started: {self.editEngageOrder}")
             char_array = self.get_char_array_autoengage_from_text(self.editEngageOrder)         ####################3
@@ -444,7 +452,7 @@ class DevWindow(QMainWindow):
             # self.set_command(CT_FIRE_START)  # Signal to start auto engagement
             
         elif current_text == "Stop":
-            self.buttonStart.setText('Start')  # Update button text back to "START"
+            self.buttonStart.setText('Fire')  # Update button text back to "START"
             self.log_message(f"Auto Engage Fire Stopping") # : {self.editEngageOrder}")
             self.set_command(CT_AUTO_ENGAGE_CANCEL)  # Signal to stop auto engagement           ####################3
             # self.send_state_change_request_to_server(ST_SAFE)  # Assuming 'ST_SAFE' is the state to return to
@@ -496,11 +504,11 @@ class DevWindow(QMainWindow):
 
     def toggle_preArm(self):
         current_text = self.buttonPreArmEnable.text()
-        if current_text == "PRE-ARMED":
+        if current_text == "Active":
             self.pre_arm_enable()  # PRE-ARMED 상태로 전환하는 함수
             # self.buttonPreArmEnable.setText('SAFE')
             print('Try to enable Pre-Armed mode.')
-        elif current_text == "SAFE":
+        elif current_text == "Deactive":
             self.send_state_change_request_to_server(ST_SAFE)
             # self.buttonPreArmEnable.setText('PRE-ARMED')
             print('Try to return Safe mode.')
@@ -577,6 +585,7 @@ class DevWindow(QMainWindow):
             self.checkBoxLaserEnable.setEnabled(False)
             self.buttonCalibrate.setEnabled(False)
             self.buttonStart.setText("Fire")
+            self.editEngageOrder.setText("") # For every Pre-armed mode, reset EngageOrder
         # elif self.currnet_state == self.State.ARMED_MANUAL:
         elif (self.RcvStateCurr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_ARMED_MANUAL:
             self.comboBoxSelectMode.setEnabled(True)
@@ -905,7 +914,6 @@ class DevWindow(QMainWindow):
         elif socketstate == SOCKET_CONNECTION_LOST:
             self.SocketState = SOCKET_CONNECTION_LOST
             self.setAllUIEnabled(False, False)
-            # self.disconnect()
             self.disconnectRequested.emit()
             # self.buttonConnect.setEnabled(True)
             # self.buttonDisconnect.setEnabled(False)
@@ -965,22 +973,23 @@ class DevWindow(QMainWindow):
             # MT_STATE prints
             print("MT_STATE Received :", ' '.join(f'0x{byte:02x}' for byte in message))
             rcv_state = struct.unpack(">III", message)[2]
-            self.log_message(f"Received MT_STATE from Robot_{rcv_state}")
-            self.RcvStateCurr = rcv_state
-            self.updateSystemState()
 
-            # Update UI and Button related to State
-            compared_state = rcv_state & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK
-            if compared_state in (ST_PREARMED, ST_AUTO_ENGAGE, ST_ARMED_MANUAL):
-                # Insert for Exception or Completion of Auto Engagement
-                if compared_state == ST_PREARMED:
+            # When MT_COMPLETE is received, skip transaction
+            if (rcv_state & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK != MT_COMPLETE):
+                self.log_message(f"Received MT_STATE from Robot_{rcv_state}")
+                self.RcvStateCurr = rcv_state
+                self.updateSystemState()
+
+                # Update UI and Button related to State
+                compared_state = rcv_state & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK
+                if compared_state in (ST_PREARMED, ST_AUTO_ENGAGE, ST_ARMED_MANUAL):
+                    # Insert for Exception or Completion of Auto Engagement
+                    if compared_state == ST_PREARMED:
+                        self.comboBoxSelectMode.setCurrentIndex(0)
+                    self.setAllUIEnabled(True, True)
+                elif compared_state in (ST_SAFE, ST_UNKNOWN):
                     self.comboBoxSelectMode.setCurrentIndex(0)
-            elif compared_state == MT_COMPLETE:
-                print("COMPLETE message received")
-            else :
-                if compared_state in (ST_SAFE, ST_UNKNOWN) :
-                    self.comboBoxSelectMode.setCurrentIndex(0)
-                self.setAllUIEnabled(True, False)
+                    self.setAllUIEnabled(True, False)
                 
         # 나머지 MT_MSG 들은 byte 배열이 들어오므로 bit -> little 변환이 필요함, 송신도 마찬가지
         elif type_msg == MT_TEXT:
@@ -988,7 +997,7 @@ class DevWindow(QMainWindow):
             text_data = bytearray(len_msg)
             text_data = message[8:8 + len_msg]
             text_str = ''.join(chr(byte) for byte in text_data if byte < 128)  # 바이트를 ASCII 문자로 변환
-            self.log_message(f"TEXT Received : {text_str}")
+            self.log_message(f"{text_str}")
 
         elif type_msg == MT_SOCKET:
             # Reference status : 
@@ -1019,10 +1028,23 @@ class DevWindow(QMainWindow):
         fps_text = f"Avg FPS : {rcvfps:.2f}"
         # self.fps = rcvfps
         self.update_fps_signal.emit(fps_text)
+        # self.update_fps_datasig.emit(rcvfps)
 
     @pyqtSlot(str)
     def update_fps(self, fps_text):
         self.fps.setText(fps_text)
+        
+    # @pyqtSlot(float)
+    # def update_fpsdata(self, rcvfps):
+    #     # Update data
+    #     self.fps_x = self.fps_x[1:]  # Remove the first element
+    #     self.fps_x.append(self.fps_x[-1] + 1)  # Add a new element
+
+    #     self.fps_y = self.fps_y[1:]  # Remove the first element
+    #     self.fps_y.append(rcvfps)  # Add a new random value
+
+    #     # Update the plot
+    #     self.fps_line.setData(self.fps_x, self.fps_y)
 
     # Using heartbeat timer, in order to detect the robot control sw to set abnormal state
     def HeartBeatTimer_event(self):
@@ -1056,6 +1078,10 @@ class DevWindow(QMainWindow):
             ((self.RcvStateCurr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) in (ST_ARMED_MANUAL, ST_PREARMED))):
             print("Pressed CT_TILTE_UP_START")
             self.set_command(CT_PAN_UP_START)
+        elif (self.is_client_connected() and 
+            ((self.RcvStateCurr & ST_CALIB_ON) == ST_CALIB_ON)):
+            print("Pressed LT_INC_Y")
+            self.set_command(LT_INC_Y)
         else:
             print("Blocking to press CT_TILTE_UP_START")
             self.log_message(f"Blocking to press : CT_TILTE_UP_START")
@@ -1064,6 +1090,10 @@ class DevWindow(QMainWindow):
             ((self.RcvStateCurr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) in (ST_ARMED_MANUAL, ST_PREARMED))):
             print("Pressed CT_TILTE_DOWN_START")
             self.set_command(CT_PAN_DOWN_START)
+        elif (self.is_client_connected() and 
+            ((self.RcvStateCurr & ST_CALIB_ON) == ST_CALIB_ON)):
+            print("Pressed LT_DEC_Y")
+            self.set_command(LT_DEC_Y)
         else:
             print("Blocking to press CT_TILTE_DOWN_START")
             self.log_message(f"Blocking to press : CT_TILTE_DOWN_START")
@@ -1072,6 +1102,10 @@ class DevWindow(QMainWindow):
             ((self.RcvStateCurr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) in (ST_ARMED_MANUAL, ST_PREARMED))):
             print("Pressed CT_PAN_RIGHT_START")
             self.set_command(CT_PAN_RIGHT_START)
+        elif (self.is_client_connected() and 
+            ((self.RcvStateCurr & ST_CALIB_ON) == ST_CALIB_ON)):
+            print("Pressed LT_INC_X")
+            self.set_command(LT_INC_X)
         else:
             print("Blocking to press CT_PAN_UP_START")
             self.log_message(f"Blocking to press : CT_PAN_UP_START")
@@ -1080,6 +1114,10 @@ class DevWindow(QMainWindow):
             ((self.RcvStateCurr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) in (ST_ARMED_MANUAL, ST_PREARMED))):
             print("Pressed CT_PAN_LEFT_START")
             self.set_command(CT_PAN_LEFT_START)
+        elif (self.is_client_connected() and 
+            ((self.RcvStateCurr & ST_CALIB_ON) == ST_CALIB_ON)):
+            print("Pressed LT_DEC_X")
+            self.set_command(LT_DEC_X)
         else:
             print("Blocking to press CT_PAN_LEFT_START")
             self.log_message(f"Blocking to press : CT_PAN_LEFT_START")
