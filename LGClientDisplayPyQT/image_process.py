@@ -63,22 +63,57 @@ class OpenCVDefaultAlgorithm():
     def get_name(self):
         return self.model_name
 
-def apply_custom_sharpening_filter(image):
-    kernel = np.array([[0, -0.5, 0],
-                       [-0.5, 3, -0.5],
-                       [0, -0.5, 0]])
-    sharpened_image = cv2.filter2D(image, -1, kernel)
-    return sharpened_image
 
-def apply_laplacian_sharpening(image):
-    laplacian = cv2.Laplacian(image, cv2.CV_64F)
-    sharpened = cv2.convertScaleAbs(image - laplacian)
-    return sharpened
+class ImageFilter:
+    def __init__(self, name):
+        self.name = name
 
-def apply_unsharp_mask(image, kernel_size=(3, 3), sigma=1.0, amount=0.3):
-    blurred = cv2.GaussianBlur(image, kernel_size, sigma)    
-    sharpened = cv2.addWeighted(image, 1 + amount, blurred, -amount, 0)    
-    return sharpened
+    def apply_custom_sharpening_filter(self, image):
+        kernel = np.array([[0, -0.5, 0],
+                           [-0.5, 3, -0.5],
+                           [0, -0.5, 0]])
+        sharpened_image = cv2.filter2D(image, -1, kernel)
+        return sharpened_image
+
+    def apply_laplacian_sharpening(self, image):
+        laplacian = cv2.Laplacian(image, cv2.CV_64F)
+        sharpened = cv2.convertScaleAbs(image - laplacian)
+        return sharpened
+
+    def apply_unsharp_mask(self, image, kernel_size=(3, 3), sigma=1.0, amount=0.3):
+        blurred = cv2.GaussianBlur(image, kernel_size, sigma)
+        sharpened = cv2.addWeighted(image, 1 + amount, blurred, -amount, 0)
+        return sharpened
+
+    def adjust_brightness(self, image, beta_value):
+        # Adjust the brightness by adding the beta_value to all pixels
+        brightened_image = cv2.convertScaleAbs(image, alpha=1, beta=beta_value)
+        return brightened_image
+
+    def get_name(self):
+        return self.name
+
+def init_filter_models():
+    models = []
+
+    custom_filter = ImageFilter("Custom Sharpening Filter")
+    models.append(custom_filter)
+    print(f"{custom_filter.get_name()} init done")
+
+    laplacian_filter = ImageFilter("Laplacian Sharpening")
+    models.append(laplacian_filter)
+    print(f"{laplacian_filter.get_name()} init done")
+
+    unsharp_mask_filter = ImageFilter("Unsharp Mask")
+    models.append(unsharp_mask_filter)
+    print(f"{unsharp_mask_filter.get_name()} init done")
+
+    brightness_filter = ImageFilter("Brightness Adjustment")
+    models.append(brightness_filter)
+    print(f"{brightness_filter.get_name()} init done")
+
+    return models
+
 
 result_data = None
 
@@ -90,28 +125,6 @@ def set_result_model(results):
 def get_result_model():
     global result_data
     return result_data
-
-
-# def init_image_processing_model():
-#     first_init = None
-
-#     # init OpenCV Default
-#     ref_image_dir = f"{script_dir}/../Targets/"
-#     num_signs = 10  # Define the number of reference images
-#     symbols = load_ref_images(ref_image_dir, num_signs)
-
-#     # init Yolo
-#     model = YOLO(f"{script_dir}/image_algo/models/best_1.pt")
-
-#     image = cv2.imread(f"{script_dir}/image_algo/models/init.jpg")
-#     image = cv2.resize(image, (CAP_PROP_FRAME_WIDTH, CAP_PROP_FRAME_HEIGHT))
-#     model.predict(image, imgsz=[960, 544], verbose=False)
-
-#     if first_init is None:
-#         first_init = True
-#         set_init_status(first_init)
-
-#     return model
 
 # 모델을 GPU로 이동하는 함수
 def to_device(model):
@@ -343,7 +356,7 @@ def image_processing_thread(QUEUE, shutdown_event, form_instance):
 
 def save_target_status(target_status):
     # Implement saving logic here
-    # print("Saving target status:", target_status)
+    print("Saving target status:", target_status)
     return
 
 def clean_up_resources():

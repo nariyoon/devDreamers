@@ -17,7 +17,7 @@ from common import common_start
 from PyQt5 import uic
 from queue import Queue
 from image_process_ui import ImageProcessingThread
-from image_process import init_image_processing_model
+from image_process import init_image_processing_model, init_filter_models
 import os
 import qdarktheme
 from image_process import get_result_model
@@ -116,6 +116,7 @@ class DevWindow(QMainWindow):
     image_received = pyqtSignal(bytes) # Sending image bytes
     rcv_state_changed = pyqtSignal(int) # Add a signal to emit RcvStateCurr changes
     model_changed = pyqtSignal(str) # Sending selected model integer value to image_ui
+    filter_changed = pyqtSignal(str) # Sending selected image filter integer value to image_ui
 
     # Define a signal to emit log messages
     log_signal = pyqtSignal(str)
@@ -146,6 +147,10 @@ class DevWindow(QMainWindow):
         self.img_model_global = init_image_processing_model()
         self.selected_model = self.img_model_global[0]
 
+        # Define img filters to expand extensibility
+        self.img_filter_global = init_filter_models()
+        self.selected_filter = self.img_filter_global[0]
+
         # Starting the Image Processing Thread
         self.image_processing_thread = ImageProcessingThread()
         self.image_processing_thread.image_processed.connect(self.update_picturebox)
@@ -155,6 +160,7 @@ class DevWindow(QMainWindow):
         self.rcv_state_changed.connect(self.image_processing_thread.update_rcv_state)
         self.image_received.connect(self.image_processing_thread.update_image_data)
         self.model_changed.connect(self.image_processing_thread.update_selected_model)
+        self.filter_changed.connect(self.image_processing_thread.update_selected_filter)
         
         # Connect the log signal to the log message slot
         self.log_signal.connect(self.append_log_message)
@@ -188,7 +194,10 @@ class DevWindow(QMainWindow):
 
     # def start_heartbeat_timer(self, interval):
     #     self.HeartbeatTimer.start(interval)
-        
+
+    #############################################
+    # Update image recognization algorithm model
+    #############################################
     def update_model_combobox(self):
         # Clear existing items
         self.comboBoxChangeAlgorithm.clear()
@@ -205,6 +214,26 @@ class DevWindow(QMainWindow):
             self.comboBoxChangeAlgorithm.addItem("No models available")
             # Set the first item as the default selected item
             self.comboBoxChangeAlgorithm.setCurrentIndex(0)
+            
+    #############################################
+    # Update image recognization filter
+    #############################################
+    def update_filter_combobox(self):
+        # Clear existing items
+        self.comboBoxChangeFilter.clear()
+        
+        # Check if filters are loaded
+        if self.img_filter_global:
+            # Populate the combo box with filter names
+            for filter in self.img_filter_global:
+                self.comboBoxChangeFilter.addItem(filter.get_name())
+            # Set the first item as the default selected item
+            self.comboBoxChangeFilter.setCurrentIndex(0)
+        else:
+            # Optionally handle the case where no filters are loaded
+            self.comboBoxChangeFilter.addItem("No img filter available")
+            # Set the first item as the default selected item
+            self.comboBoxChangeFilter.setCurrentIndex(0)
 
     def initUI(self):
         # self.print_models()
@@ -214,6 +243,10 @@ class DevWindow(QMainWindow):
         self.update_model_combobox()
         self.get_img_model() # update to image model of processing image thread
 
+        # update combobox of image filter
+        self.update_filter_combobox()
+        self.get_img_filter()
+
         # setValidator
         self.editEngageOrder.setValidator(intValidator)
         self.editTCPPort.setValidator(intValidator)
@@ -221,6 +254,7 @@ class DevWindow(QMainWindow):
         # setListener
         self.comboBoxSelectMode.currentIndexChanged.connect(self.on_combobox_changed_mode)
         self.comboBoxChangeAlgorithm.currentIndexChanged.connect(self.on_combobox_changed_algorithm)
+        self.comboBoxChangeFilter.currentIndexChanged.connect(self.on_combobox_changed_imgfilter)
         self.buttonConnect.clicked.connect(self.connect)
         self.buttonDisconnect.clicked.connect(self.disconnect)
         self.buttonPreArmEnable.clicked.connect(self.toggle_preArm)
@@ -275,6 +309,16 @@ class DevWindow(QMainWindow):
             model_name = self.selected_model.get_name()
             self.model_changed.emit(model_name)
             return self.selected_model
+        else:
+            print("Model list is empty or not initialized.")
+            return None
+        
+    def get_img_filter(self):
+        if self.img_filter_global and len(self.img_filter_global) > 0:
+            # set default
+            filter_name = self.selected_filter.get_name()
+            self.filter_changed.emit(filter_name)
+            return self.selected_filter
         else:
             print("Model list is empty or not initialized.")
             return None
@@ -457,15 +501,6 @@ class DevWindow(QMainWindow):
             self.set_command(CT_AUTO_ENGAGE_CANCEL)  # Signal to stop auto engagement           ####################3
             # self.send_state_change_request_to_server(ST_SAFE)  # Assuming 'ST_SAFE' is the state to return to
 
-    # def on_combobox_changed_algorithm(self, index):
-    #     # Your code here to handle the index change
-    #     if 0 <= index < len(self.img_model_global):
-    #         self.selected_model = self.img_model_global[index]
-    #         print(f"on_combobox_changed_algorithm... SELECTED: {self.img_model_global[index].get_name()}")
-    #     else:
-    #         print("Invalid index or model list is empty")
-    #         self.selected_model = None
-
     @pyqtSlot(int)
     def on_combobox_changed_algorithm(self, index):
         if 0 <= index < len(self.img_model_global):
@@ -478,6 +513,18 @@ class DevWindow(QMainWindow):
             print("Invalid index or model list is empty")
             self.selected_model = None
             
+    @pyqtSlot(int)
+    def on_combobox_changed_imgfilter(self, index):
+        if 0 <= index < len(self.img_model_global):
+            self.selected_filter = self.img_filter_global[index]
+            filter_name = self.selected_filter.get_name()
+            self.filter_changed.emit(filter_name)
+            print(f"Img filter selected: {self.img_filter_global[index].get_name()}")
+            # # print(f"on_combobox_changed_algorithm... SELECTED: {self.img_model_global[index].get_name()}")
+        else:
+            print("Invalid index or image filter list is empty")
+            self.selected_filter = None
+
     def toggle_calibrate(self):
         if isinstance(self.RcvStateCurr, bytes):
             state_int = int.from_bytes(self.RcvStateCurr, byteorder='little')
