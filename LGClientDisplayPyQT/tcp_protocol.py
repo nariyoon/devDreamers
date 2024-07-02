@@ -46,8 +46,8 @@ ERR_CONNECTION_LOST = 2
 
 # target status
 TARGET_NONE = 0
-BEFORE_TARGET = 1
-AFTER_TARGET = 2
+TARGET_BEFORE_FIRE = 1
+TARGET_AFTER_FIRE = 2
 TARGET_FIRING = 3
 
 # image width and height
@@ -197,6 +197,13 @@ def tcp_ip_thread(ip, port, shutdown_event):
                 if elapsedTime > 0:
                     fps = frameCnt / elapsedTime
                     sendFpsToUI(fps)
+            elif type_ == MT_STATE:
+                valueInt = int.from_bytes(buffer, byteorder='big')
+                if valueInt == 11:
+                    print("set target status to after firing")
+                    setTargetStatus(TARGET_AFTER_FIRE)
+                else:
+                    sendMsgToUI(packedData)
             else:
                 #print("len_ ", len_, "header type_ ", type_, "data_", int.from_bytes(buffer, byteorder='big'))
                 sendMsgToUI(packedData)
@@ -229,7 +236,6 @@ def buildTagetOrientation(msg):
     global clientSock
     global autoEngageStop
     global targetNum
-    global targetStatus
 
     cnt = 0
     buffer = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
@@ -268,7 +274,7 @@ def buildTagetOrientation(msg):
                     sameCoordinateCnt = 0
                     print("move to target: ", targetNum)
                     while detectCnt < 1:
-                        targetStatus = BEFORE_TARGET
+                        setTargetStatus(TARGET_BEFORE_FIRE)
                         time.sleep(0.01)
                         if autoEngageStop == True:
                             print("Stop ongoing fire target")
@@ -345,16 +351,17 @@ def buildTagetOrientation(msg):
 
                     print("sameCoordinateCnt: ", sameCoordinateCnt)
                     sameCoordinateCnt = 0
-                    targetStatus = TARGET_FIRING
+                    setTargetStatus(TARGET_FIRING)
                     sendEmptyMsg(MT_FIRE)
                     time.sleep(0.1)
-                    targetStatus = AFTER_TARGET
+                    # targetStatus = AFTER_TARGET
                     break
 
         sendEmptyMsg(MT_COMPLETE)
         time.sleep(3)
         sendEmptyMsg(MT_GO_CENTER)
         autoEngageStop = False
+        setTargetStatus(TARGET_NONE)
     else:
         print("no target_info")
 
@@ -431,9 +438,13 @@ def compareCoordinate(lastPan, lastTilt, pan, tilt):
 
 def getFps():
     global fps
-
     return fps
 
+def setTargetStatus(status):
+    global targetStatus
+    targetStatus = status
+    #print("target status: ", targetStatus)
+ 
 def getTargetStatus():
     global targetStatus
     return targetStatus
