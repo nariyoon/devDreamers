@@ -48,6 +48,7 @@ ERR_CONNECTION_LOST = 2
 TARGET_NONE = 0
 BEFORE_TARGET = 1
 AFTER_TARGET = 2
+TARGET_FIRING = 3
 
 # image width and height
 WIDTH = 960
@@ -223,40 +224,12 @@ def tcp_ip_thread(ip, port, shutdown_event):
     callback_shutdown_event = 0 # reset callback_shutdown_event
     print("tcp_ip_thread Thread is closed successfully.")
 
-# Function to check if the socket is connected
-def is_socket_connected():
-    global clientSock
-    try:
-        # the following sends zero bytes over the socket
-        # this is generally a no-op that should succeed only if the socket is open
-        clientSock.sendall(b'', flags=clientSock.MSG_DONTWAIT)
-        return True
-    except socket.error as e:
-        # socket is not open if send raises an error
-        # specific errors like EAGAIN or EWOULDBLOCK indicate socket is open but cannot send right now
-        return False
-    except Exception as e:
-        return False
-
-# Function to safely send data
-def safe_send_data(data):
-    global clientSock
-    if is_socket_connected():
-        try:
-            clientSock.sendall(data)
-            print("Data sent successfully.")
-        except socket.error as e:
-            print(f"Failed to send data: {e}")
-    else:
-        print("Socket is not connected.")
-
 def sendEmptyMsg(msg):
     global clientSock
     data = bytearray()
     data.extend(struct.pack('>II', 1, msg))
     data.append(255)
     print("sendEmptyMsg : ", msg)
-    #safe_send_data(data)
     clientSock.sendall(data)
 
 def buildTagetOrientation(msg):
@@ -282,21 +255,26 @@ def buildTagetOrientation(msg):
             if autoEngageStop == True:
                 print("Stop ongoing fire target")
                 break
+
             print("target num: ", buffer[i])
             for target in targetLabelData['target_info']:
                 if autoEngageStop == True:
                     print("Stop ongoing fire target")
                     break
+
                 label = target.get('label', 'N/A')
                 if buffer[i] == int(label):
                     targetNum = buffer[i]
+                    sendTargetNumToUI(targetNum)
                     detectCnt = 0
                     lastPan = -99.99
                     lastTilt = -99.99
                     lastX = 0
                     lastY = 0
-                    pan = 0
-                    tilt = 0
+                    #pan = 0
+                    #tilt = 0
+                    pan = -1
+                    tilt = -1
                     sameCoordinateCnt = 0
                     print("move to target: ", targetNum)
                     while detectCnt < 1:
@@ -307,11 +285,17 @@ def buildTagetOrientation(msg):
                             break
                         data = bytearray()
                         targetCenterData = get_result_model()
+                        findTarget = 0
                         for target in targetCenterData['target_info']:
                             label = target.get('label', 'N/A')
                             if buffer[i] == int(label):
                                 center = target.get('center', [0, 0])
+                                findTarget += 1
                                 break
+
+                         if findTarget > 15:
+                            print("target is not found in while loop")
+                            #break
 
                         centerX = 0
                         centerY = 0
@@ -323,8 +307,8 @@ def buildTagetOrientation(msg):
                             else:
                                 centerY = value
 
-                        if sameCoordinateCnt > 1000:
-                            print("same coordinate count over 500, move to center")
+                        if sameCoordinateCnt > 700:
+                            print("same coordinate count over 700, move to center")
                             sendEmptyMsg(MT_GO_CENTER)
                             sameCoordinateCnt = 0
                             continue
@@ -339,16 +323,17 @@ def buildTagetOrientation(msg):
 
                         data.extend(struct.pack('>II', 8, MT_TARGET_DIFF))
 
-                        if centerX > 450: # dectect right side
-                            panError = (centerX + 20) - WIDTH/2
+                        if centerX > 500: # dectect right side
+                            print("right side X")
+                            panError = (centerX + 10) - WIDTH/2
                         else:
-                            panError = (centerX) - WIDTH/2
+                            panError = (centerX - 10) - WIDTH/2
                         pan = pan - panError/75
                         convertValue = send_float(pan)
                         data.extend(struct.pack('>I', convertValue))
 
-                        if centerX > 450: # dectect right side
-                            tiltError = (centerY - 30) - HEIGHT/2 # 70
+                        if centerX > 500: # dectect right side
+                            tiltError = (centerY - 50) - HEIGHT/2 # 70
                         else:
                             tiltError = (centerY - 40) - HEIGHT/2 # 70
                         tilt = tilt - tiltError/75
@@ -362,12 +347,13 @@ def buildTagetOrientation(msg):
                         lastPan = pan
                         lastTilt = tilt
 
-                        print("data: ", data)
+                        #print("data: ", data)
                         clientSock.sendall(data)
                         #safe_send_data(data)
 
                     print("sameCoordinateCnt: ", sameCoordinateCnt)
                     sameCoordinateCnt = 0
+                    targetStatus = TARGET_FIRING
                     sendEmptyMsg(MT_FIRE)
                     targetStatus = AFTER_TARGET
                     break
@@ -415,6 +401,14 @@ def sendFpsToUI(fps):
         fps_update_callback(fps)
     else:
         print("No callback functions set for fps update.")
+
+def sendTargetNumToUI(targetNum):
+    buffer = f"Current Target is {targetNum}"
+    encoded_buffer = buffer.encode('utf-8')
+    len_ = len(buffer)
+    type_ = MT_TEXT
+    packedData = struct.pack(f'>II{len_}s', len_, type_, encoded_buffer)
+    sendMsgToUI(packedData)
 
 def buildTargetOrientationThread(shutdown_event):
     while not shutdown_event.is_set(): # and callback_shutdown_event == 0:
