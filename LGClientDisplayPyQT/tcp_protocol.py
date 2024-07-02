@@ -44,28 +44,14 @@ ERR_SUCCESS = 0
 ERR_FAIL_TO_CONNECT = 1
 ERR_CONNECTION_LOST = 2
 
+# target status
+TARGET_NONE = 0
+BEFORE_TARGET = 1
+AFTER_TARGET = 2
+
 # image width and height
 WIDTH = 960
 HEIGHT = 544
-def print_socket_info():
-    global clientSock
-    # Get socket family (AF_INET, AF_INET6, ...)
-    print(f"Socket family: {clientSock.family}")
-    
-    # Get socket type (SOCK_STREAM, SOCK_DGRAM, ...)
-    print(f"Socket type: {clientSock.type}")
-    
-    # Get socket protocol (0 if unknown)
-    print(f"Socket protocol: {clientSock.proto}")
-    
-    # Get local address and port
-    print(f"Local address: {clientSock.getsockname()}")
-    
-    # Get remote address and port if connected
-    if clientSock.fileno() != -1:  # Check if socket is connected
-        print(f"Remote address: {clientSock.getpeername()}")
-    else:
-        print("Socket is not connected.")
 
 # Define message structures
 class TMesssageHeader:
@@ -77,6 +63,9 @@ class TMesssageHeader:
 clientSock = 0
 fps = 0
 callback_shutdown_event = 0
+targetNum = -1
+targetStatus = TARGET_NONE
+autoEngageStop = False
 
 # Define for updating image to UI
 uimsg_update_callback = None
@@ -267,6 +256,10 @@ def buildTagetOrientation(msg):
 
     # get target orientation
     global clientSock
+    global autoEngageStop
+    global targetNum
+    global targetStatus
+
     cnt = 0
     buffer = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
     for i in msg:
@@ -278,11 +271,17 @@ def buildTagetOrientation(msg):
     if targetLabelData is not None:
         print("Target Info")
         for i in range(cnt):
+            if autoEngageStop == True:
+                print("Stop ongoing fire target")
+                break
             print("target num: ", buffer[i])
             for target in targetLabelData['target_info']:
+                if autoEngageStop == True:
+                    print("Stop ongoing fire target")
+                    break
                 label = target.get('label', 'N/A')
                 if buffer[i] == int(label):
-                    print("target is found: ", int(label))
+                    targetNum = buffer[i]
                     detectCnt = 0
                     lastPan = -99.99
                     lastTilt = -99.99
@@ -291,9 +290,13 @@ def buildTagetOrientation(msg):
                     pan = 0
                     tilt = 0
                     sameCoordinateCnt = 0
-                    print("move to target")
+                    print("move to target: ", targetNum)
                     while detectCnt < 1:
+                        targetStatus = BEFORE_TARGET
                         time.sleep(0.01)
+                        if autoEngageStop == True:
+                            print("Stop ongoing fire target")
+                            break
                         data = bytearray()
                         targetCenterData = get_result_model()
                         for target in targetCenterData['target_info']:
@@ -358,7 +361,7 @@ def buildTagetOrientation(msg):
                     print("sameCoordinateCnt: ", sameCoordinateCnt)
                     sameCoordinateCnt = 0
                     sendEmptyMsg(MT_FIRE)
-
+                    targetStatus = AFTER_TARGET
                     break
                 else:
                     print("can not find target")
@@ -367,11 +370,13 @@ def buildTagetOrientation(msg):
 	    #Below is sample to let go aim to the center(if it can't find the target)
         time.sleep(3)
         sendEmptyMsg(MT_GO_CENTER)
+        autoEngageStop = False
     else:
         print("no target_info")
 
 def sendMsgToCannon(msg):
     global clientSock
+    global autoEngageStop
 
     type = msg[4:8]
     value = msg[8:]
@@ -381,6 +386,10 @@ def sendMsgToCannon(msg):
     if typeInt == MT_TARGET_SEQUENCE:
         print("type is MT_TARGET_SEQUENCE: ", value)
         task_queue.put(value)
+    elif typeInt == MT_COMMANDS:
+        if value == 0xff:
+            print("stop")
+            autoEngageStop = True
     else:
         clientSock.sendall(msg)
 
@@ -430,3 +439,11 @@ def getFps():
     global fps
 
     return fps
+
+def getTargetStatus():
+    global targetStatus
+    return targetStatus
+
+def getTargetStatus():
+    global targetNum
+    return targetNum
