@@ -564,32 +564,32 @@ class DevWindow(QMainWindow):
             self.comboBoxSelectMode.setEnabled(False)
             # self.comboBoxSelectMode.setCurrentIndex(0)
             self.editPreArmCode.setEnabled(True)
-            self.buttonPreArmEnable.setText('PRE-ARMED')
+            self.buttonPreArmEnable.setText('Active')
             self.checkBoxLaserEnable.setEnabled(False)
             self.buttonCalibrate.setEnabled(False)
-            self.buttonStart.setText("Start")
+            self.buttonStart.setText("Fire")
         # elif self.currnet_state == self.State.PREARMED:
         elif (self.RcvStateCurr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_PREARMED:
             self.comboBoxSelectMode.setEnabled(True)
             # self.comboBoxSelectMode.setCurrentIndex(0)
             self.editPreArmCode.setEnabled(False)
-            self.buttonPreArmEnable.setText('SAFE')
+            self.buttonPreArmEnable.setText('Deactive')
             self.checkBoxLaserEnable.setEnabled(False)
             self.buttonCalibrate.setEnabled(False)
-            self.buttonStart.setText("Start")
+            self.buttonStart.setText("Fire")
         # elif self.currnet_state == self.State.ARMED_MANUAL:
         elif (self.RcvStateCurr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_ARMED_MANUAL:
             self.comboBoxSelectMode.setEnabled(True)
             self.editPreArmCode.setEnabled(False)
-            self.buttonPreArmEnable.setText('SAFE')
+            self.buttonPreArmEnable.setText('Deactive')
             self.checkBoxLaserEnable.setEnabled(True)
             self.buttonCalibrate.setEnabled(True)
-            self.buttonStart.setText("Start")
+            self.buttonStart.setText("Fire")
         # elif self.currnet_state == self.State.AUTO_ENGAGE:
         elif (self.RcvStateCurr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_AUTO_ENGAGE:
             self.comboBoxSelectMode.setEnabled(True)
             self.editPreArmCode.setEnabled(False)
-            self.buttonPreArmEnable.setText('SAFE')
+            self.buttonPreArmEnable.setText('Deactive')
             self.checkBoxLaserEnable.setEnabled(False)
             self.buttonCalibrate.setEnabled(False)
             # self.buttonStart.setText("Start")
@@ -598,11 +598,14 @@ class DevWindow(QMainWindow):
             self.comboBoxSelectMode.setEnabled(False)
             # self.comboBoxSelectMode.setCurrentIndex(0)
             self.editPreArmCode.setEnabled(False) 
-            self.buttonPreArmEnable.setText('PRE-ARM')
+            self.buttonPreArmEnable.setText('Active')
             self.checkBoxLaserEnable.setEnabled(False)
             self.buttonCalibrate.setEnabled(False)
-            self.buttonStart.setText("Start")
+            self.buttonStart.setText("Fire")
+            self.editPreArmCode.setEnabled(False)
+            self.buttonPreArmEnable.setEnabled(False)
         # self.comboBoxChangeAlgorithm
+        self.labelState.setAlignment(Qt.AlignCenter)
 
     @pyqtSlot()
     def pre_arm_enable(self):
