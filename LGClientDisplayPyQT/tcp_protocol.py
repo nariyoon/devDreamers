@@ -262,8 +262,8 @@ def buildTagetOrientation(msg):
                     lastY = 0
                     #pan = 0
                     #tilt = 0
-                    pan = -1
-                    tilt = -1
+                    pan = -1.5
+                    tilt = -1.5
                     sameCoordinateCnt = 0
                     print("move to target: ", targetNum)
                     while detectCnt < 1:
@@ -300,6 +300,8 @@ def buildTagetOrientation(msg):
                             print("same coordinate count over 700, move to center")
                             sendEmptyMsg(MT_GO_CENTER)
                             sameCoordinateCnt = 0
+                            lastX = 0
+                            lastY = 0
                             continue
 
                         if lastX == centerX and lastY == centerY:
@@ -316,7 +318,7 @@ def buildTagetOrientation(msg):
                             print("right side X")
                             panError = (centerX + 10) - WIDTH/2
                         else:
-                            panError = (centerX - 10) - WIDTH/2
+                            panError = (centerX - 20) - WIDTH/2
                         pan = pan - panError/75
                         convertValue = send_float(pan)
                         data.extend(struct.pack('>I', convertValue))
