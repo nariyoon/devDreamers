@@ -237,8 +237,13 @@ def image_processing_thread(QUEUE, shutdown_event, form_instance):
 
     mp_hands = mp.solutions.hands
     hands = mp_hands.Hands()
+    # p = psutil.Process(os.getpid())
+    # p.nice(psutil.REALTIME_PRIORITY_CLASS)
     p = psutil.Process(os.getpid())
-    p.nice(psutil.REALTIME_PRIORITY_CLASS)
+    # 프로세스 우선 순위 설정 (예: -20이 가장 높은 우선 순위, 19가 가장 낮은 우선 순위)
+    # p.nice(-20)  # 이 값을 적절히 조정하세요
+
+
 
     target_status = {}
     disappearance_threshold = 3
