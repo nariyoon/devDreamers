@@ -304,9 +304,9 @@ def buildTagetOrientation(msg):
                             findCnt += 1
                             if findCnt > 15:
                                 print("target is not found in while loop")
-                                break
-                            else:
-                                continue
+                                #break
+                            #else:
+                            #    continue
 
                         centerX = 0
                         centerY = 0
