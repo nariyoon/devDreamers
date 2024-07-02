@@ -974,7 +974,6 @@ class DevWindow(QMainWindow):
                     self.comboBoxSelectMode.setCurrentIndex(0)
             elif compared_state == MT_COMPLETE:
                 print("COMPLETE message received")
-                self.setAllUIEnabled(True, True)
             else :
                 if compared_state in (ST_SAFE, ST_UNKNOWN) :
                     self.comboBoxSelectMode.setCurrentIndex(0)
