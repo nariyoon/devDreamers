@@ -171,6 +171,7 @@ class DevWindow(QMainWindow):
         # Load ui of remote.ui
         ui_mainwindow = uic.loadUi(ui_file_path, self)
 
+        # app.setStyleSheet(qdarktheme.load_stylesheet('light'))
         app.setStyleSheet(qdarktheme.load_stylesheet())
         self.initUI()
 
@@ -237,10 +238,8 @@ class DevWindow(QMainWindow):
         self.buttonDown.clicked.connect(self.clicked_command_down)
         self.buttonRight.setStyleSheet("border: none;")
         self.buttonRight.clicked.connect(self.clicked_command_right)
-
         self.buttonLeft.setStyleSheet("border: none;")
         self.buttonLeft.clicked.connect(self.clicked_command_left)
-
         self.buttonFire.setStyleSheet("border: none;")
         self.buttonFire.clicked.connect(self.clicked_command_fire)
 
@@ -254,6 +253,7 @@ class DevWindow(QMainWindow):
         self.editIPAddress.textChanged.connect(self.validCheckIpAndPort)
         self.editTCPPort.textChanged.connect(self.validCheckIpAndPort)
         self.editPreArmCode.textChanged.connect(self.validCheckPreArmedCode)
+        self.editPreArmCode.setEchoMode(QLineEdit.Password)
         self.editEngageOrder.textChanged.connect(self.validCheckEngageOrder)
 
         # Set focus on the main window

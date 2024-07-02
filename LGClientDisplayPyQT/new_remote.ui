@@ -7,19 +7,19 @@
     <x>0</x>
     <y>0</y>
     <width>1260</width>
-    <height>840</height>
+    <height>860</height>
    </rect>
   </property>
   <property name="minimumSize">
    <size>
     <width>1260</width>
-    <height>840</height>
+    <height>860</height>
    </size>
   </property>
   <property name="maximumSize">
    <size>
     <width>1260</width>
-    <height>840</height>
+    <height>860</height>
    </size>
   </property>
   <property name="windowTitle">
@@ -42,7 +42,7 @@
       <x>10</x>
       <y>10</y>
       <width>220</width>
-      <height>150</height>
+      <height>151</height>
      </rect>
     </property>
     <property name="title">
@@ -59,7 +59,7 @@
      </property>
      <property name="font">
       <font>
-       <pointsize>15</pointsize>
+       <pointsize>13</pointsize>
       </font>
      </property>
      <property name="text">
@@ -90,7 +90,7 @@
      </property>
      <property name="font">
       <font>
-       <pointsize>15</pointsize>
+       <pointsize>13</pointsize>
       </font>
      </property>
      <property name="text">
@@ -116,6 +116,11 @@
        <height>32</height>
       </rect>
      </property>
+     <property name="font">
+      <font>
+       <pointsize>13</pointsize>
+      </font>
+     </property>
      <property name="text">
       <string>Connect</string>
      </property>
@@ -129,6 +134,11 @@
        <height>32</height>
       </rect>
      </property>
+     <property name="font">
+      <font>
+       <pointsize>13</pointsize>
+      </font>
+     </property>
      <property name="text">
       <string>Disconnect</string>
      </property>
@@ -140,7 +150,7 @@
       <x>240</x>
       <y>10</y>
       <width>220</width>
-      <height>150</height>
+      <height>151</height>
      </rect>
     </property>
     <property name="title">
@@ -157,7 +167,7 @@
      </property>
      <property name="font">
       <font>
-       <pointsize>15</pointsize>
+       <pointsize>13</pointsize>
       </font>
      </property>
      <property name="text">
@@ -196,6 +206,11 @@
        <height>32</height>
       </rect>
      </property>
+     <property name="font">
+      <font>
+       <pointsize>13</pointsize>
+      </font>
+     </property>
      <item>
       <property name="text">
        <string>Pre Arm</string>
@@ -223,7 +238,7 @@
      </property>
      <property name="font">
       <font>
-       <pointsize>15</pointsize>
+       <pointsize>13</pointsize>
       </font>
      </property>
      <property name="text">
@@ -237,7 +252,7 @@
       <x>470</x>
       <y>10</y>
       <width>221</width>
-      <height>150</height>
+      <height>151</height>
      </rect>
     </property>
     <property name="title">
@@ -267,24 +282,11 @@
        </property>
        <property name="font">
         <font>
-         <pointsize>15</pointsize>
+         <pointsize>13</pointsize>
         </font>
        </property>
        <property name="text">
         <string>Laser</string>
-       </property>
-      </widget>
-      <widget class="QLabel" name="label_9">
-       <property name="geometry">
-        <rect>
-         <x>10</x>
-         <y>10</y>
-         <width>91</width>
-         <height>16</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>Manual</string>
        </property>
       </widget>
       <widget class="QPushButton" name="buttonCalibrate">
@@ -296,8 +298,31 @@
          <height>32</height>
         </rect>
        </property>
+       <property name="font">
+        <font>
+         <pointsize>13</pointsize>
+        </font>
+       </property>
        <property name="text">
         <string>Calibrate</string>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_9">
+       <property name="geometry">
+        <rect>
+         <x>10</x>
+         <y>0</y>
+         <width>91</width>
+         <height>16</height>
+        </rect>
+       </property>
+       <property name="font">
+        <font>
+         <pointsize>12</pointsize>
+        </font>
+       </property>
+       <property name="text">
+        <string>Armed Manual</string>
        </property>
       </widget>
      </widget>
@@ -313,7 +338,7 @@
        </property>
        <property name="font">
         <font>
-         <pointsize>15</pointsize>
+         <pointsize>13</pointsize>
         </font>
        </property>
        <property name="text">
@@ -330,7 +355,7 @@
         </rect>
        </property>
        <property name="text">
-        <string/>
+        <string>12345678</string>
        </property>
       </widget>
       <widget class="QPushButton" name="buttonStart">
@@ -357,7 +382,7 @@
        </property>
        <property name="font">
         <font>
-         <pointsize>13</pointsize>
+         <pointsize>12</pointsize>
         </font>
        </property>
        <property name="text">
@@ -373,7 +398,7 @@
       <x>980</x>
       <y>10</y>
       <width>271</width>
-      <height>821</height>
+      <height>841</height>
      </rect>
     </property>
     <layout class="QVBoxLayout" name="layout_stateview">
@@ -387,7 +412,7 @@
        </property>
        <property name="font">
         <font>
-         <pointsize>36</pointsize>
+         <pointsize>32</pointsize>
          <bold>true</bold>
         </font>
        </property>
@@ -395,7 +420,7 @@
         <bool>false</bool>
        </property>
        <property name="styleSheet">
-        <string notr="true">color: #00ff00</string>
+        <string notr="true"/>
        </property>
        <property name="text">
         <string>Auto Engaged</string>
@@ -460,7 +485,7 @@
         </property>
         <property name="icon">
          <iconset>
-          <normaloff>resources/target-goals-icon.png</normaloff>resources/target-goals-icon.png</iconset>
+          <normaloff>resources/shooting-target-color-icon.png</normaloff>resources/shooting-target-color-icon.png</iconset>
         </property>
         <property name="iconSize">
          <size>
@@ -569,7 +594,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <property name="geometry">
      <rect>
       <x>10</x>
-      <y>160</y>
+      <y>170</y>
       <width>960</width>
       <height>544</height>
      </rect>
@@ -581,7 +606,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
       <x>700</x>
       <y>10</y>
       <width>271</width>
-      <height>150</height>
+      <height>151</height>
      </rect>
     </property>
     <property name="title">
@@ -598,7 +623,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
      </property>
      <property name="font">
       <font>
-       <pointsize>15</pointsize>
+       <pointsize>13</pointsize>
       </font>
      </property>
      <property name="text">
@@ -616,7 +641,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
      </property>
      <property name="font">
       <font>
-       <pointsize>15</pointsize>
+       <pointsize>13</pointsize>
       </font>
      </property>
      <property name="text">
@@ -627,20 +652,30 @@ li.checked::marker { content: &quot;\2612&quot;; }
      <property name="geometry">
       <rect>
        <x>110</x>
-       <y>60</y>
+       <y>70</y>
        <width>141</width>
        <height>32</height>
       </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>13</pointsize>
+      </font>
      </property>
     </widget>
     <widget class="QComboBox" name="comboBoxChangeFilter">
      <property name="geometry">
       <rect>
        <x>110</x>
-       <y>100</y>
+       <y>110</y>
        <width>141</width>
        <height>32</height>
       </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>13</pointsize>
+      </font>
      </property>
     </widget>
     <widget class="QLabel" name="settingsInfo">
@@ -652,6 +687,11 @@ li.checked::marker { content: &quot;\2612&quot;; }
        <height>16</height>
       </rect>
      </property>
+     <property name="font">
+      <font>
+       <pointsize>11</pointsize>
+      </font>
+     </property>
      <property name="text">
       <string>Settings can change only safe mode.</string>
      </property>
@@ -661,7 +701,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <property name="geometry">
      <rect>
       <x>10</x>
-      <y>700</y>
+      <y>720</y>
       <width>961</width>
       <height>131</height>
      </rect>
