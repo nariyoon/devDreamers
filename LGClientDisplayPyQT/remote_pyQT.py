@@ -972,6 +972,8 @@ class DevWindow(QMainWindow):
                 # Insert for Exception or Completion of Auto Engagement
                 if compared_state == ST_PREARMED:
                     self.comboBoxSelectMode.setCurrentIndex(0)
+            elif compared_state == MT_COMPLETE:
+                print("COMPLETE message received")
                 self.setAllUIEnabled(True, True)
             else :
                 if compared_state in (ST_SAFE, ST_UNKNOWN) :
