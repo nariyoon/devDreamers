@@ -198,6 +198,14 @@ def tcp_ip_thread(ip, port, shutdown_event):
                     # fps_info.append({"fps": fps})
                     # fps_queue.put(fps_info)
                     sendFpsToUI(fps)
+                    if frameCnt % 100 == 0:
+                        buffer = f"TEXT TEST at FrameCnt {frameCnt}"
+                        encoded_buffer = buffer.encode('utf-8')  # 문자열을 바이트로 인코딩
+                        len_ = len(buffer)
+                        type_ = 4
+                        packedData = struct.pack(f'>II{len_}s', len_, type_, encoded_buffer)
+                        sendMsgToUI(packedData)
+
             else:
                 #print("len_ ", len_, "header type_ ", type_, "data_", int.from_bytes(buffer, byteorder='big'))
                 sendMsgToUI(packedData)
@@ -390,6 +398,8 @@ def sendMsgToCannon(msg):
         if value == 0xff:
             print("stop")
             autoEngageStop = True
+        else:
+            clientSock.sendall(msg)
     else:
         clientSock.sendall(msg)
 

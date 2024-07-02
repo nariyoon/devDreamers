@@ -543,6 +543,7 @@ class DevWindow(QMainWindow):
         if (self.RcvStateCurr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_SAFE:
         # if self.currnet_state == self.State.SAFE:
             self.comboBoxSelectMode.setEnabled(False)
+            # self.comboBoxSelectMode.setCurrentIndex(0)
             self.editPreArmCode.setEnabled(True)
             self.buttonPreArmEnable.setText('PRE-ARMED')
             self.checkBoxLaserEnable.setEnabled(False)
@@ -551,6 +552,7 @@ class DevWindow(QMainWindow):
         # elif self.currnet_state == self.State.PREARMED:
         elif (self.RcvStateCurr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_PREARMED:
             self.comboBoxSelectMode.setEnabled(True)
+            # self.comboBoxSelectMode.setCurrentIndex(0)
             self.editPreArmCode.setEnabled(False)
             self.buttonPreArmEnable.setText('SAFE')
             self.checkBoxLaserEnable.setEnabled(False)
@@ -574,6 +576,7 @@ class DevWindow(QMainWindow):
             self.buttonStart.setText("Start")
         else:
             self.comboBoxSelectMode.setEnabled(False)
+            # self.comboBoxSelectMode.setCurrentIndex(0)
             self.editPreArmCode.setEnabled(True) 
             self.buttonPreArmEnable.setText('PRE-ARMED')
             self.checkBoxLaserEnable.setEnabled(False)
