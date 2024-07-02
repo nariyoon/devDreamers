@@ -189,6 +189,9 @@ class DevWindow(QMainWindow):
         # # Connect signal and slot for HeartTimer
         # self.startHeartbeat.connect(self.start_heartbeat_timer)
         # self.stopHeartbeat.connect(self.HeartbeatTimer.stop)
+        self.PrearmedCheckTimer = QTimer(self)
+        self.PrearmedCheckTimer.timeout.connect(self.PrearmedCheckTimer_event)
+        self.PrearmedCheckTimer.setInterval(1000)  # 1초 (1000 밀리초) 간격으로 타이머 설정
 
         self.show()
 
@@ -555,6 +558,8 @@ class DevWindow(QMainWindow):
             self.pre_arm_enable()  # PRE-ARMED 상태로 전환하는 함수
             # self.buttonPreArmEnable.setText('SAFE')
             print('Try to enable Pre-Armed mode.')
+            self.PrearmedCheckTimer.start()
+            
         elif current_text == "Deactive":
             self.send_state_change_request_to_server(ST_SAFE)
             # self.buttonPreArmEnable.setText('PRE-ARMED')
@@ -1107,6 +1112,11 @@ class DevWindow(QMainWindow):
         # else:
         #     print("Server check failed, will retry in 10 seconds.")
 
+    def PrearmedCheckTimer_event(self):
+        if self.RcvStateCurr != MT_PREARM:
+            self.log_message("Pre-armed password is not correct.")
+        self.PrearmedCheckTimer.stop()
+
     def check_server(self, ip, port):
         # Simple TCP socket to check the server
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -1186,20 +1196,36 @@ class DevWindow(QMainWindow):
         else:
             state_int = self.RcvStateCurr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK
 
-        # elif state_int == ST_UNKNOWN:
-        if state_int == ST_PREARMED:
-            key_map = { Qt.Key_I: CT_PAN_UP_START, Qt.Key_L: CT_PAN_RIGHT_START, Qt.Key_J: CT_PAN_LEFT_START, Qt.Key_M: CT_PAN_DOWN_START }
-        elif state_int == ST_ARMED_MANUAL:
-            key_map = { Qt.Key_I: CT_PAN_UP_START, Qt.Key_L: CT_PAN_RIGHT_START, Qt.Key_J: CT_PAN_LEFT_START, Qt.Key_M: CT_PAN_DOWN_START, Qt.Key_F: CT_FIRE_START }
+        if isinstance(self.RcvStateCurr, bytes):
+            state_cal = int.from_bytes(self.RcvStateCurr, byteorder='little') & ST_CALIB_ON
         else:
-            key_map = {}
+            state_cal = self.RcvStateCurr & ST_CALIB_ON
 
-        if event.key() in key_map:
-            if event.key() == Qt.Key_F: # For Fire, Sending continuous 10 times fire msg
-                for _ in range(5):
-                    self.set_command(CT_FIRE_START)
-                self.set_command(CT_FIRE_STOP)
-            else: # For other registered keys                
+        if state_cal != ST_CALIB_ON:
+            if state_int == ST_PREARMED:
+                key_map = { Qt.Key_I: CT_PAN_UP_START, Qt.Key_L: CT_PAN_RIGHT_START, Qt.Key_J: CT_PAN_LEFT_START, Qt.Key_M: CT_PAN_DOWN_START }
+            elif state_int == ST_ARMED_MANUAL:
+                key_map = { Qt.Key_I: CT_PAN_UP_START, Qt.Key_L: CT_PAN_RIGHT_START, Qt.Key_J: CT_PAN_LEFT_START, Qt.Key_M: CT_PAN_DOWN_START, Qt.Key_F: CT_FIRE_START }
+            else:
+                key_map = {}
+
+            if event.key() in key_map:
+                if event.key() == Qt.Key_F: # For Fire, Sending continuous 10 times fire msg
+                    for _ in range(3):
+                        self.set_command(CT_FIRE_START)
+                        time.sleep(0.01)
+                    self.set_command(CT_FIRE_STOP)
+                else: # For other registered keys                
+                    self.set_command(key_map[event.key()])
+        elif state_cal == ST_CALIB_ON:
+            print("cal keypressed")
+            if state_int == ST_ARMED_MANUAL:
+                key_map = { Qt.Key_I: LT_INC_Y, Qt.Key_L: LT_INC_X, Qt.Key_J: LT_DEC_X, Qt.Key_M: LT_DEC_Y }
+            else:
+                key_map = {}
+
+            if event.key() in key_map:
+                # For other registered keys                
                 self.set_command(key_map[event.key()])
 
 if __name__ == "__main__":

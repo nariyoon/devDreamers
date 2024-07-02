@@ -41,8 +41,8 @@ class ImageProcessingThread(QThread):
                 img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
                 
                 if img is not None:
-                    X_correct = 490  # Tuning Point compared to Laser
-                    Y_correct = 310  # Tuning Point compared to Laser
+                    X_correct = 478 # - Almost at 1m  # 500 - out of range # 490 - left up against laser  # Tuning Point compared to Laser
+                    Y_correct = 308 # - Almost at 1m # 300 - out of range # 310 - left up against laser  # Tuning Point compared to Laser
                     img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
                     h, w, ch = img_rgb.shape
                     bytes_per_line = ch * w
