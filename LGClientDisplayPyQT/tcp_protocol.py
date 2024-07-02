@@ -177,15 +177,16 @@ def tcp_ip_thread(ip, port, shutdown_event):
 
                 if frame_stack.full():
                     frame_stack.get()
-                frame_stack.put(image_buffer)
+                frame_stack.put((image_buffer, targetStatus, targetNum))
 
-                init_model_status = get_init_status()
+                # init_model_status = get_init_status()
 
-                if init_model_status is None:
-                    init_packedData = init_model_image(buffer)
-                    sendMsgToUI(init_packedData)
-                else:
-                    sendMsgToUI(packedData)
+                # if init_model_status is None:
+                #     init_packedData = init_model_image(buffer)
+                #     sendMsgToUI(init_packedData)
+                # else:
+                #     
+                sendMsgToUI(packedData)
 
                 # calculate the frame
                 time.sleep(0.01)
@@ -346,6 +347,7 @@ def buildTagetOrientation(msg):
                     sameCoordinateCnt = 0
                     targetStatus = TARGET_FIRING
                     sendEmptyMsg(MT_FIRE)
+                    time.sleep(0.1)
                     targetStatus = AFTER_TARGET
                     break
 

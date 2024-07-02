@@ -215,31 +215,32 @@ def flush_queue(q):
             break  # 큐가 비어있으면 반복 종료 Queue.empty()
 
 
+
 def image_processing_thread(QUEUE, shutdown_event, form_instance):
     DATA = {}
     debug_folder = "debug"
     os.makedirs(debug_folder, exist_ok=True)
-    # Mediapipe 로그 레벨 설정
     os.environ['GLOG_minloglevel'] = '2'
 
-    # Mediapipe 손 모듈 초기화
     mp_hands = mp.solutions.hands
     hands = mp_hands.Hands()
-    mp_drawing = mp.solutions.drawing_utils
-
-    # 프로세스 우선순위 설정
     p = psutil.Process(os.getpid())
     p.nice(psutil.REALTIME_PRIORITY_CLASS)
 
-    # Target status tracking
     target_status = {}
-    disappearance_threshold = 3  # Number of frames an object can disappear before being considered hit
-    movement_threshold = 5  # Pixel movement to consider as shaking
-    direction_threshold = 20  # Pixel movement to consider as moving in a direction
+    disappearance_threshold = 3
+    movement_threshold = 5
+    direction_threshold = 20
 
     while not shutdown_event.is_set():
         try:
-            frame = QUEUE.get(timeout=1)
+            frame, targetStatus, targetNum = QUEUE.get(timeout=1)
+
+            # print(f"targetStatus {targetStatus} targetNum {targetNum}")
+
+            if targetStatus == 3:
+                continue
+
             imageMat = cv2.imdecode(np.frombuffer(frame, dtype=np.uint8), cv2.IMREAD_COLOR)
 
             models = form_instance.get_img_model()
@@ -275,42 +276,43 @@ def image_processing_thread(QUEUE, shutdown_event, form_instance):
                     "center": [center_x, center_y],
                 })
 
-                # Update target status
-                if label not in target_status:
-                    target_status[label] = {
-                        'disappearance_count': 0,
-                        'last_position': (center_x, center_y),
-                        'movement': 'stationary'
-                    }
-                else:
-                    prev_center_x, prev_center_y = target_status[label]['last_position']
-                    displacement = np.sqrt((center_x - prev_center_x) ** 2 + (center_y - prev_center_y) ** 2)
+                if targetStatus == 2 and label == str(targetNum):
+                    if label not in target_status:
+                        target_status[label] = {
+                            'disappearance_count': 0,
+                            'last_position': (center_x, center_y),
+                            'movement': 'stationary'
+                        }
+                    elif target_status[label]['movement'] != 'hit':
+                        prev_center_x, prev_center_y = target_status[label]['last_position']
+                        displacement = np.sqrt((center_x - prev_center_x) ** 2 + (center_y - prev_center_y) ** 2)
 
-                    if displacement > movement_threshold:
-                        target_status[label]['movement'] = 'shaking'
-                    elif abs(center_x - prev_center_x) > direction_threshold or abs(center_y - prev_center_y) > direction_threshold:
-                        target_status[label]['movement'] = 'moving'
+                        if displacement > movement_threshold:
+                            target_status[label]['movement'] = 'hit'
+                        elif abs(center_x - prev_center_x) > direction_threshold or abs(center_y - prev_center_y) > direction_threshold:
+                            target_status[label]['movement'] = 'moving'
+                        else:
+                            target_status[label]['movement'] = 'stationary'
+
+                        target_status[label]['last_position'] = (center_x, center_y)
+                        target_status[label]['disappearance_count'] = 0
+
+            if targetStatus == 2:
+                if str(targetNum) in target_status:
+                    if not any(t['label'] == str(targetNum) for t in target_info):
+                        target_status[str(targetNum)]['disappearance_count'] += 1
+                        if target_status[str(targetNum)]['disappearance_count'] > disappearance_threshold:
+                            target_status[str(targetNum)]['movement'] = 'hit'
                     else:
-                        target_status[label]['movement'] = 'stationary'
+                        target_status[str(targetNum)]['disappearance_count'] = 0
+                    
 
-                    target_status[label]['last_position'] = (center_x, center_y)
-                    target_status[label]['disappearance_count'] = 0
+                    save_target_status(target_status)
 
-            # Check for disappeared targets
-            for label in list(target_status.keys()):
-                if not any(t['label'] == label for t in target_info):
-                    target_status[label]['disappearance_count'] += 1
-                    if target_status[label]['disappearance_count'] > disappearance_threshold:
-                        target_status[label]['movement'] = 'hit'
-                else:
-                    target_status[label]['disappearance_count'] = 0
-
-            # 성능을 위해 이미지를 RGB로 변환
             image = cv2.cvtColor(imageMat, cv2.COLOR_BGR2RGB)
             results = hands.process(image)
             if results.multi_hand_landmarks:
                 for hand_landmarks in results.multi_hand_landmarks:
-                    # 랜드마크 좌표로 경계 상자 계산
                     x_min, y_min = float('inf'), float('inf')
                     x_max, y_max = float('-inf'), float('-inf')
                     for landmark in hand_landmarks.landmark:
@@ -324,19 +326,22 @@ def image_processing_thread(QUEUE, shutdown_event, form_instance):
                         "center": [(x_min + x_max) / 2, (y_min + y_max) / 2],
                     })
 
-            # DATA 딕셔너리에 업데이트
             DATA['target_info'] = target_info
-            # DATA['target_status'] = target_status
 
             box_queue.put(box_info)
-            target_queue.put(target_status)
             set_result_model(DATA)
+
         except Empty:
             continue
-    
-    clean_up_resources()  # clean up resources
-    flush_queue(QUEUE)    # flush QUEUE instance
+
+    clean_up_resources()
+    flush_queue(QUEUE)
     print("Main Image Process Thread Exit")
+
+def save_target_status(target_status):
+    # Implement saving logic here
+    # print("Saving target status:", target_status)
+    return
 
 def clean_up_resources():
     target_info = []

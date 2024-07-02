@@ -4,8 +4,8 @@ from queue import LifoQueue
 from queue import Empty
 
 # frame_queue와 processed_queue를 tcp_protocol.py로 옮김
-frame_queue = Queue(maxsize=10)
-frame_stack = LifoQueue(maxsize=10)
+frame_queue = Queue(maxsize=5)
+frame_stack = LifoQueue(maxsize=5)
 task_queue = Queue()
 
 class OverwritingQueue(Queue):

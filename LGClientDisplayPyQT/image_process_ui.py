@@ -67,11 +67,9 @@ class ImageProcessingThread(QThread):
                     # Draw boxes from box_info
                     try:
                         result_data = box_queue.get_nowait()
-                        target_status = target_queue.get_nowait()  # Get target status data
                         self.prev_data = result_data.copy()
                     except Empty:
                         result_data = self.prev_data
-                        target_status = {}
 
                     for box_info in result_data:
                         x1, y1, x2, y2 = box_info['bbox']
@@ -102,16 +100,6 @@ class ImageProcessingThread(QThread):
                         # Draw label text
                         painter.setPen(QColor(0, 0, 0))  # Black text
                         painter.drawText(x1 + 2, y1 - 2, label_text)
-
-                        # Draw additional information below the box
-                        status_text = target_status.get(label, {}).get('movement', 'unknown')
-                        status_size = painter.fontMetrics().size(0, status_text)
-                        painter.setBrush(QColor(255, 255, 255))
-                        painter.drawRect(x1, y2 + 4, status_size.width() + 4, status_size.height() + 4)
-                        painter.setBrush(Qt.NoBrush)  # Reset brush to no brush
-
-                        painter.setPen(QColor(0, 0, 0))  # Black text
-                        painter.drawText(x1 + 2, y2 + status_size.height() + 2, status_text)
 
                     painter.end()
                     self.image_processed.emit(pixmap)
