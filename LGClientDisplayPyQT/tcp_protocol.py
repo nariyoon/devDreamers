@@ -293,7 +293,7 @@ def buildTagetOrientation(msg):
                     sameCoordinateCnt = 0
                     print("move to target")
                     while detectCnt < 1:
-                        time.sleep(0.03)
+                        time.sleep(0.01)
                         data = bytearray()
                         targetCenterData = get_result_model()
                         for target in targetCenterData['target_info']:
@@ -312,9 +312,11 @@ def buildTagetOrientation(msg):
                             else:
                                 centerY = value
 
-                        if sameCoordinateCnt > 300:
-                            print("same coordinate count over 300")
-                            break
+                        if sameCoordinateCnt > 1000:
+                            print("same coordinate count over 500, move to center")
+                            sendEmptyMsg(MT_GO_CENTER)
+                            sameCoordinateCnt = 0
+                            continue
 
                         if lastX == centerX and lastY == centerY:
                             sameCoordinateCnt = sameCoordinateCnt + 1
@@ -326,12 +328,18 @@ def buildTagetOrientation(msg):
 
                         data.extend(struct.pack('>II', 8, MT_TARGET_DIFF))
 
-                        panError = (centerX) - WIDTH/2
+                        if centerX > 450: # dectect right side
+                            panError = (centerX + 20) - WIDTH/2
+                        else:
+                            panError = (centerX) - WIDTH/2
                         pan = pan - panError/75
                         convertValue = send_float(pan)
                         data.extend(struct.pack('>I', convertValue))
 
-                        tiltError = (centerY - 40) - HEIGHT/2 # 70
+                        if centerX > 450: # dectect right side
+                            tiltError = (centerY - 30) - HEIGHT/2 # 70
+                        else:
+                            tiltError = (centerY - 40) - HEIGHT/2 # 70
                         tilt = tilt - tiltError/75
                         convertValue = send_float(tilt)
                         data.extend(struct.pack('>I', convertValue))
