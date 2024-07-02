@@ -349,7 +349,7 @@ def buildTagetOrientation(msg):
                             panError = (centerX - 20) - WIDTH/2
                             tiltError = (centerY - 40) - HEIGHT/2
                         elif getTargetStage(area) == TARGET_STATGE_5:
-                            panError = (centerX - 10) - WIDTH/2
+                            panError = (centerX - 5) - WIDTH/2
                             tiltError = (centerY - 35) - HEIGHT/2
                         else:
                             panError = (centerX - 20) - WIDTH/2
