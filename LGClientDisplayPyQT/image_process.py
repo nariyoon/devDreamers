@@ -257,6 +257,8 @@ def image_processing_thread(QUEUE, shutdown_event, form_instance):
 
                 width = x2 - x1
                 height = y2 - y1
+                area = height * height
+                # print(f"label {label} area {area}")
                 if width < 20 or height < 20 or width > 100 or height > 100:
                     continue
 
@@ -309,22 +311,22 @@ def image_processing_thread(QUEUE, shutdown_event, form_instance):
 
                     save_target_status(target_status)
 
-            image = cv2.cvtColor(imageMat, cv2.COLOR_BGR2RGB)
-            results = hands.process(image)
-            if results.multi_hand_landmarks:
-                for hand_landmarks in results.multi_hand_landmarks:
-                    x_min, y_min = float('inf'), float('inf')
-                    x_max, y_max = float('-inf'), float('-inf')
-                    for landmark in hand_landmarks.landmark:
-                        x, y = int(landmark.x * image.shape[1]), int(landmark.y * image.shape[0])
-                        x_min, y_min = min(x_min, x), min(y_min, y)
-                        x_max, y_max = max(x_max, x), max(y_max, y)
+            # image = cv2.cvtColor(imageMat, cv2.COLOR_BGR2RGB)
+            # results = hands.process(image)
+            # if results.multi_hand_landmarks:
+            #     for hand_landmarks in results.multi_hand_landmarks:
+            #         x_min, y_min = float('inf'), float('inf')
+            #         x_max, y_max = float('-inf'), float('-inf')
+            #         for landmark in hand_landmarks.landmark:
+            #             x, y = int(landmark.x * image.shape[1]), int(landmark.y * image.shape[0])
+            #             x_min, y_min = min(x_min, x), min(y_min, y)
+            #             x_max, y_max = max(x_max, x), max(y_max, y)
 
-                    box_info.append({
-                        "label": "10",
-                        "bbox": [x_min, y_min, x_max, y_max],
-                        "center": [(x_min + x_max) / 2, (y_min + y_max) / 2],
-                    })
+            #         box_info.append({
+            #             "label": "10",
+            #             "bbox": [x_min, y_min, x_max, y_max],
+            #             "center": [(x_min + x_max) / 2, (y_min + y_max) / 2],
+            #         })
 
             DATA['target_info'] = target_info
 
