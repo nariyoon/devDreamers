@@ -420,7 +420,8 @@
         <bool>false</bool>
        </property>
        <property name="styleSheet">
-        <string notr="true"/>
+        <string notr="true">background-color: #e29b6f;
+color: #2f2f2f</string>
        </property>
        <property name="text">
         <string>Auto Engaged</string>
