@@ -26,6 +26,9 @@ class ImageProcessingThread(QThread):
     def update_selected_model(self, img_process_model):
         self.img_process_model = img_process_model
 
+    def update_selected_filter(self, img_process_filter):
+        self.img_process_filter = img_process_filter
+
     @pyqtSlot(int)
     def update_rcv_state(self, state):
         self.rcv_state_curr = state
