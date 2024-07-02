@@ -225,7 +225,6 @@ class DevWindow(QMainWindow):
         self.buttonCalibrate.clicked.connect(self.toggle_calibrate)
         self.buttonStart.clicked.connect(self.send_autoengage_start)
 
-
         # direction buttons
         # Current file path of script of remote.ui file
         # ui_file = 'new_remote.ui'
@@ -309,8 +308,8 @@ class DevWindow(QMainWindow):
         self.layeredQVBox.addWidget(self.pictureBox)
 
         # fps 
-        self.fps = QLabel("Average FPS : N/A", self)
-        self.layeredQVBox.addWidget(self.fps)
+        # self.fps = QLabel("Average FPS : N/A", self)
+        # self.layeredQVBox.addWidget(self.fps)
 
         self.overlayWidget.setLayout(self.layeredQVBox)
 
@@ -472,13 +471,28 @@ class DevWindow(QMainWindow):
             self.selected_model = None
             
     def toggle_calibrate(self):
-        if self.buttonCalibrate.isChecked():
-            # TODO
-            self.send_calib()
-            self.buttonCalibrate.setText('OFF')
+        if isinstance(self.RcvStateCurr, bytes):
+            state_int = int.from_bytes(self.RcvStateCurr, byteorder='little')
         else:
-            self.send_calib()
-            self.buttonCalibrate.setText('ON')
+            state_int = self.RcvStateCurr
+
+        current_text = self.buttonCalibrate.text()
+        print("Calibrate Button Pushed : ", current_text)
+
+        if current_text == "Calibrate":
+            self.buttonCalibrate.setText('Cal_Off')  # Update button text to "Cal_Off"
+            state_int |= ST_CALIB_ON
+            print("Current CAL_ON Status : ", state_int)
+            self.send_state_change_request_to_server(state_int)
+            self.log_message(f"Calibration Started!") 
+            
+        elif current_text == "Cal_Off":
+            self.buttonCalibrate.setText('Calibrate')  # Update button text to "Cal_Off"
+            # state_int should be 8
+            state_int &= ST_CLEAR_CALIB_MASK
+            print("Current CAL_OFF Status : ", state_int)
+            self.send_state_change_request_to_server(state_int)
+            self.log_message(f"Calibration Off!") 
 
     def toggle_preArm(self):
         current_text = self.buttonPreArmEnable.text()
@@ -995,7 +1009,7 @@ class DevWindow(QMainWindow):
     ###################################################################
     def callback_fps(self, rcvfps):
         # print("fps updated : ", rcvfps)
-        fps_text = f"Average FPS : {rcvfps:.2f}"
+        fps_text = f"Avg FPS : {rcvfps:.2f}"
         # self.fps = rcvfps
         self.update_fps_signal.emit(fps_text)
 
