@@ -71,6 +71,7 @@ CT_PAN_RIGHT_STOP = 0xFD
 CT_PAN_UP_STOP = 0xFB
 CT_PAN_DOWN_STOP = 0xF7
 CT_FIRE_STOP = 0xEF
+CT_AUTO_ENGAGE_CANCEL = 0xFF
 
 # Define calibration codes
 LT_CAL_COMPLETE = 0x00
@@ -435,16 +436,16 @@ class DevWindow(QMainWindow):
 
         current_text = self.buttonStart.text()
         print("Auto Engage Button Pushed : ", current_text)
-        if current_text == "START":
-            self.buttonStart.setText('STOP')  # Update button text to "STOP"
+        if current_text == "Start":
+            self.buttonStart.setText('Stop')  # Update button text to "STOP"
             self.log_message(f"Auto Engage Fire Started: {self.editEngageOrder}")
             # self.set_command(CT_FIRE_START)  # Signal to start auto engagement
             
-        elif current_text == "STOP":
-            self.buttonStart.setText('START')  # Update button text back to "START"
+        elif current_text == "Stop":
+            self.buttonStart.setText('Start')  # Update button text back to "START"
             self.log_message(f"Auto Engage Fire Stopping: {self.editEngageOrder}")
-            self.set_command(CT_FIRE_STOP)  # Signal to stop auto engagement
-            self.send_state_change_request_to_server(ST_SAFE)  # Assuming 'ST_SAFE' is the state to return to
+            self.set_command(CT_AUTO_ENGAGE_CANCEL)  # Signal to stop auto engagement
+            # self.send_state_change_request_to_server(ST_SAFE)  # Assuming 'ST_SAFE' is the state to return to
 
     # def on_combobox_changed_algorithm(self, index):
     #     # Your code here to handle the index change
@@ -546,6 +547,7 @@ class DevWindow(QMainWindow):
             self.buttonPreArmEnable.setText('PRE-ARMED')
             self.checkBoxLaserEnable.setEnabled(False)
             self.buttonCalibrate.setEnabled(False)
+            self.buttonStart.setText("Start")
         # elif self.currnet_state == self.State.PREARMED:
         elif (self.RcvStateCurr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_PREARMED:
             self.comboBoxSelectMode.setEnabled(True)
@@ -553,6 +555,7 @@ class DevWindow(QMainWindow):
             self.buttonPreArmEnable.setText('SAFE')
             self.checkBoxLaserEnable.setEnabled(False)
             self.buttonCalibrate.setEnabled(False)
+            self.buttonStart.setText("Start")
         # elif self.currnet_state == self.State.ARMED_MANUAL:
         elif (self.RcvStateCurr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_ARMED_MANUAL:
             self.comboBoxSelectMode.setEnabled(True)
@@ -560,6 +563,7 @@ class DevWindow(QMainWindow):
             self.buttonPreArmEnable.setText('SAFE')
             self.checkBoxLaserEnable.setEnabled(True)
             self.buttonCalibrate.setEnabled(True)
+            self.buttonStart.setText("Start")
         # elif self.currnet_state == self.State.AUTO_ENGAGE:
         elif (self.RcvStateCurr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_AUTO_ENGAGE:
             self.comboBoxSelectMode.setEnabled(True)
@@ -567,12 +571,14 @@ class DevWindow(QMainWindow):
             self.buttonPreArmEnable.setText('SAFE')
             self.checkBoxLaserEnable.setEnabled(False)
             self.buttonCalibrate.setEnabled(False)
+            self.buttonStart.setText("Start")
         else:
             self.comboBoxSelectMode.setEnabled(False)
             self.editPreArmCode.setEnabled(True) 
             self.buttonPreArmEnable.setText('PRE-ARMED')
             self.checkBoxLaserEnable.setEnabled(False)
             self.buttonCalibrate.setEnabled(False)
+            self.buttonStart.setText("Start")
         # self.comboBoxChangeAlgorithm
 
     @pyqtSlot()
