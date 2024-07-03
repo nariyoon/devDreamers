@@ -7,7 +7,7 @@ import numpy as np
 import time
 from queue import Empty
 from cannon_queue import *
-from tcp_protocol import getTargetStatus, getTargetNum
+from tcp_protocol import getTargetStatus, getTargetNum, stopAutoEngageMode
 
 class ImageProcessingThread(QThread):
     image_processed = pyqtSignal(QPixmap)
@@ -84,6 +84,7 @@ class ImageProcessingThread(QThread):
                         x1, y1, x2, y2 = box_info['bbox']
                         label = box_info['label']
                         if label == "10":
+                            stopAutoEngageMode()
                             pen_color = QColor(255, 0, 0)  # Red for hand
                             label_text = "hand"
                             painter.setPen(QPen(pen_color, 3))

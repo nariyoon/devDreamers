@@ -543,3 +543,8 @@ def getTargetStage(area):
     #print("## stage ", stage, " ", area)
     return stage
 
+def stopAutoEngageMode():
+    global autoEngageStop
+
+    if autoEngageStop == False:
+        autoEngageStop = True
