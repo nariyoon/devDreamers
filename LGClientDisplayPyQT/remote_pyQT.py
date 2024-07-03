@@ -471,6 +471,18 @@ class DevWindow(QMainWindow):
     def update_picturebox(self, pixmap):
         self.pictureBox.setPixmap(pixmap)
         self.pictureBox.setScaledContents(True)
+
+    def set_image_from_path(self, image_path):
+        abs_image_path = os.path.abspath(image_path)
+        if os.path.exists(abs_image_path):
+            pixmap = QPixmap(abs_image_path)
+            if not pixmap.isNull():
+                self.pictureBox.setPixmap(pixmap)
+                self.pictureBox.setScaledContents(True)
+            else:
+                print(f"Failed to load image from {abs_image_path}")
+        else:
+            print(f"Image file does not exist: {abs_image_path}")
 		
     @pyqtSlot(int)        
     def on_combobox_changed_mode(self, index):
@@ -629,11 +641,13 @@ class DevWindow(QMainWindow):
             self.shutdown_event.set()
             self.tcp_thread.join()  
             # print("TCP thread is closed successfully.")
+            self.set_image_from_path(".\\resources\\load_dreamer.gif")
         else:
             print("TCP thread was not active or not created.")
         
         # print("All threads are closed successfully.")
         self.log_message("Disconnected", 'Info')
+        self.set_image_from_path(".\\resources\\load_dreamer.gif")
 
         # self.currnet_state = self.State.UNKNOWN
         # self.currnet_state = self.State.UNKNOWN
@@ -1133,6 +1147,7 @@ class DevWindow(QMainWindow):
             # print test
             # print("Exception Message Received", type_msg)
             print("MT_EXCEPTION Received :", ' '.join(f'0x{byte:02x}' for byte in message))
+            self.set_image_from_path(".\\resources\\load_dreamer.gif")
 
     ###################################################################
     # callback_fps : Print fps in MainWnd
