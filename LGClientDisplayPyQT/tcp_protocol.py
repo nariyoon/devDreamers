@@ -181,7 +181,7 @@ def tcp_ip_thread(ip, port, shutdown_event):
             packedData = struct.pack(f'>II{len(buffer)}s', len_, type_, buffer)
 
             if type_ == MT_IMAGE:
-                image_buffer = buffer
+                image_buffer = buffer.copy()
     
                 if frame_stack.full():
                     frame_stack.get()
