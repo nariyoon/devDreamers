@@ -235,7 +235,7 @@ class DevWindow(QMainWindow):
             for filter in self.img_filter_global:
                 self.comboBoxChangeFilter.addItem(filter.get_name())
             # Set the first item as the default selected item
-            self.comboBoxChangeFilter.setCurrentIndex(0)
+            self.comboBoxChangeFilter.setCurrentIndex(3)
         else:
             # Optionally handle the case where no filters are loaded
             self.comboBoxChangeFilter.addItem("No img filter available")
@@ -650,14 +650,14 @@ class DevWindow(QMainWindow):
 
             # script_dir = os.path.dirname(os.path.realpath(__file__))
             # ui_file_path = os.path.join(script_dir, '\\resources\\load_dreamer.gif')
-            # self.set_image_from_path('\\resources\\load_dreamer.gif')
+            self.set_image_from_path('.\\resources\\load_dreamer.gif')
         else:
             print("TCP thread was not active or not created.")
         
         # print("All threads are closed successfully.")
         # script_dir = os.path.dirname(os.path.realpath(__file__))
         # ui_file_path = os.path.join(script_dir, '\\resources\\load_dreamer.gif')
-        # self.set_image_from_path('\\resources\\load_dreamer.gif')
+        self.set_image_from_path(".\\resources\\load_dreamer.gif")
         self.log_message("Disconnected", 'Info')
         
         # self.currnet_state = self.State.UNKNOWN
