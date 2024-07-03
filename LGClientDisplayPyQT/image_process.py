@@ -359,7 +359,7 @@ def image_processing_thread(QUEUE, shutdown_event, form_instance):
                         target_status[str(targetNum)]['disappearance_count'] = 0
                     
 
-                    # save_target_status(target_status)
+                    save_target_status(target_status)
 
             image = cv2.cvtColor(imageMat, cv2.COLOR_BGR2RGB)
             results = hands.process(image)
@@ -393,7 +393,6 @@ def image_processing_thread(QUEUE, shutdown_event, form_instance):
 def save_target_status(target_status):
     # Implement saving logic here
     print("Saving target status:", target_status)
-    return
 
 def clean_up_resources():
     target_info = []
