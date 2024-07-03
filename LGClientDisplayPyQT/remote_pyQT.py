@@ -598,10 +598,14 @@ class DevWindow(QMainWindow):
     def toggle_preArm(self):
         current_text = self.buttonPreArmEnable.text()
         if current_text == "Active":
-            self.pre_arm_enable()  # PRE-ARMED 상태로 전환하는 함수
-            # self.buttonPreArmEnable.setText('SAFE')
-            # print('Try to enable Pre-Armed mode.')
-            self.PrearmedCheckTimer.start()
+            if self.prearm_code == self.editPreArmCode.text():
+                self.pre_arm_enable()  
+                # PRE-ARMED 상태로 전환하는 함수
+                # self.buttonPreArmEnable.setText('SAFE')
+                # print('Try to enable Pre-Armed mode.')
+                self.PrearmedCheckTimer.start()
+            else:    
+                self.log_message("Pre-armed password is not correct.", 'Error')
             
         elif current_text == "Deactive":
             self.send_state_change_request_to_server(ST_SAFE)
@@ -1195,8 +1199,8 @@ class DevWindow(QMainWindow):
         #     print("Server check failed, will retry in 10 seconds.")
 
     def PrearmedCheckTimer_event(self):
-        if self.RcvStateCurr != ST_PREARMED:
-            self.log_message("Pre-armed password is not correct.", 'Error')
+        # if self.RcvStateCurr != ST_PREARMED:
+        #     self.log_message("Pre-armed password is not correct.", 'Error')
         self.PrearmedCheckTimer.stop()
 
     def check_server(self, ip, port):
