@@ -253,7 +253,7 @@ def sendEmptyMsg(msg):
     data = bytearray()
     data.extend(struct.pack('>II', 1, msg))
     data.append(255)
-    print("sendEmptyMsg : ", msg)
+    #print("sendEmptyMsg : ", msg)
     clientSock.sendall(data)
 
 def check_label_10(result_data):
@@ -283,13 +283,13 @@ def buildTagetOrientation(msg):
 
     targetLabelData = get_result_model()
     if targetLabelData is not None:
-        print("Target Info")
+        #print("Target Info")
         for i in range(cnt):
             if autoEngageStop == True:
                 print("Stop ongoing fire target")
                 break
 
-            print("target num: ", buffer[i])
+            #print("target num: ", buffer[i])
             for target in targetLabelData['target_info']:
                 if autoEngageStop == True:
                     print("Stop ongoing fire target")
@@ -414,17 +414,11 @@ def buildTagetOrientation(msg):
                         #sendEmptyMsg(MT_GO_CENTER)
                     break
 
-        # # Found Label == TEN
-        # if found10label == True:
-        #     sendTextToUIFoundLabel10()
-            
         sendEmptyMsg(MT_COMPLETE)
         time.sleep(3)
         sendEmptyMsg(MT_GO_CENTER)
         autoEngageStop = False
         setTargetStatus(TARGET_NONE)
-    else:
-        print("no target_info")
 
 def sendMsgToCannon(msg):
     global clientSock
@@ -434,7 +428,7 @@ def sendMsgToCannon(msg):
     value = msg[8:]
 
     typeInt = int.from_bytes(type, byteorder='big')
-    print("msg: ", msg, "len: ", len(msg), "type: ", typeInt, "value: ", value)
+    #print("msg: ", msg, "len: ", len(msg), "type: ", typeInt, "value: ", value)
     if typeInt == MT_TARGET_SEQUENCE:
         print("type is MT_TARGET_SEQUENCE: ", value)
         task_queue.put(value)
@@ -548,3 +542,4 @@ def stopAutoEngageMode():
 
     if autoEngageStop == False:
         autoEngageStop = True
+        sendTextToUIFoundLabel10()
