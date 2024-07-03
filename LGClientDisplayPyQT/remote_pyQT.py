@@ -9,7 +9,7 @@ from enum import Enum
 import numpy as np
 import pyqtgraph as pg
 from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QCheckBox, QLabel, QLineEdit, QTextEdit, QVBoxLayout, QGridLayout, QWidget, QMessageBox
-from PyQt5.QtGui import QPixmap, QIntValidator, QIcon, QMovie
+from PyQt5.QtGui import QPixmap, QIntValidator, QIcon, QMovie, QTextCursor, QColor
 from PyQt5.QtCore import pyqtSignal, pyqtSlot, Qt, QTimer, QMetaObject, Q_ARG, QObject
 from usermodel.usermodel import UserModel
 from tcp_protocol import sendMsgToCannon, set_uimsg_update_callback, set_fps_update_callback
@@ -120,7 +120,7 @@ class DevWindow(QMainWindow):
     filter_changed = pyqtSignal(str) # Sending selected image filter integer value to image_ui
 
     # Define a signal to emit log messages
-    log_signal = pyqtSignal(str)
+    log_signal = pyqtSignal(str, str)
 
     # # Register Disconnect function as pyqtSignal
     disconnectRequested = pyqtSignal()
@@ -406,13 +406,13 @@ class DevWindow(QMainWindow):
         port = self.editTCPPort.text()
 
         if not ip:
-             self.log_message(f'Please enter IP address.')
+             self.log_message(f'Please enter IP address.', 'Error')
         elif not port:
-             self.log_message(f'Please enter port number.')
+             self.log_message(f'Please enter port number.', 'Error')
         elif not self.check_ipv4(ip) :
-             self.log_message(f'Not match IP Address Pattern.')
+             self.log_message(f'Not match IP Address Pattern.', 'Error')
         elif not self.check_port(port) :
-             self.log_message(f'Port must be 0-65535.')
+             self.log_message(f'Port must be 0-65535.', 'Error')
         else:
              self.buttonConnect.setEnabled(True)
 
@@ -421,7 +421,7 @@ class DevWindow(QMainWindow):
             self.buttonPreArmEnable.setEnabled(True)
         else:
             self.buttonPreArmEnable.setEnabled(False)
-            self.log_message(f"Please enter preArmedCode")
+            self.log_message(f"Please enter preArmedCode", 'Error')
 
     def validCheckEngageOrder(self,order):
         if order:
@@ -463,7 +463,7 @@ class DevWindow(QMainWindow):
             ## 1안 : Sequence + AutoEngage Switching ##
             ###########################################
 			# nothing to do in the mode change to auto engage
-            self.log_message(f"Auto Engage State is Changed") # : {self.editEngageOrder}")
+            self.log_message(f"Auto Engage State is Changed", 'Debug') # : {self.editEngageOrder}")
             # print("Auto Engage State is Changed: ", {self.editEngageOrder})
             self.send_state_change_request_to_server(ST_AUTO_ENGAGE)
 
@@ -499,12 +499,12 @@ class DevWindow(QMainWindow):
             # self.log_message(f"Auto Engage Fire Started: {self.editEngageOrder}")
             char_array = self.get_char_array_autoengage_from_text(self.editEngageOrder)         ####################3
             self.send_target_order_to_server(char_array)                                        ####################3
-            self.log_message(f"Auto Engage Fire Started!") # ," ".join(f'0x{byte:02x}' for byte in char_array))
+            self.log_message(f"Started Auto Engage Fire..", 'Info') # ," ".join(f'0x{byte:02x}' for byte in char_array))
             # self.set_command(CT_FIRE_START)  # Signal to start auto engagement
             
         elif current_text == "Stop":
             self.buttonStart.setText('Fire')  # Update button text back to "START"
-            self.log_message(f"Auto Engage Fire Stopping") # : {self.editEngageOrder}")
+            self.log_message(f"Stopped Auto Engage Fire.", 'Info') # : {self.editEngageOrder}")
             self.set_command(CT_AUTO_ENGAGE_CANCEL)  # Signal to stop auto engagement           ####################3
             # self.send_state_change_request_to_server(ST_SAFE)  # Assuming 'ST_SAFE' is the state to return to
 
@@ -547,7 +547,7 @@ class DevWindow(QMainWindow):
             state_int |= ST_CALIB_ON
             print("Current CAL_ON Status : ", state_int)
             self.send_state_change_request_to_server(state_int)
-            self.log_message(f"Calibration Started!") 
+            self.log_message(f"Start Calibration..", 'Info') 
             
         elif current_text == "Cal_Off":
             self.buttonCalibrate.setText('Calibrate')  # Update button text to "Cal_Off"
@@ -555,7 +555,7 @@ class DevWindow(QMainWindow):
             state_int &= ST_CLEAR_CALIB_MASK
             print("Current CAL_OFF Status : ", state_int)
             self.send_state_change_request_to_server(state_int)
-            self.log_message(f"Calibration Off!") 
+            self.log_message(f"Stop Calibration..", 'Info') 
 
     def toggle_preArm(self):
         current_text = self.buttonPreArmEnable.text()
@@ -574,7 +574,7 @@ class DevWindow(QMainWindow):
     def connect(self):
         ip = self.editIPAddress.text()
         port = int(self.editTCPPort.text())
-        self.log_message(f"Connecting to {ip}:{port}")
+        self.log_message(f"Connecting to {ip}:{port}", "Info")
 
         if hasattr(self, 'tcp_thread') and self.tcp_thread.is_alive():
             self.log_message("Already connected, disconnect first.")
@@ -729,6 +729,7 @@ class DevWindow(QMainWindow):
     
     @pyqtSlot()
     def send_calib(self):
+        calibrateOn = self.buttonCalibrate.isChecked()
         self.log_message(f"Calibration Enabled: {self.buttonCalibrate.isChecked()}")
         print("Calibration Enabled: ", {self.buttonCalibrate.isChecked()})
 
@@ -808,7 +809,7 @@ class DevWindow(QMainWindow):
             msg = struct.pack(">II", struct.calcsize(">B"), MT_CALIB_COMMANDS)
             msg += struct.pack(">B", code)
             sendMsgToCannon(msg)
-            self.log_message(f"Send calib message: {code}")
+            self.log_message(f"Send calib message: {code}",'Debug')
             return True
         return False
 
@@ -893,14 +894,40 @@ class DevWindow(QMainWindow):
 
     ########################################################################
     # log message textbox 출력 - Invoke 처리 완료
-    @pyqtSlot(str)
-    def append_log_message(self, message):
-        self.logBox.append(message)
-        self.logBox.ensureCursorVisible()
-        QApplication.processEvents()  # Process events to update UI
+    # @pyqtSlot(str)
+    # def append_log_message(self, message):
+    #     self.logBox.append(message)
+    #     self.logBox.ensureCursorVisible()
+    #     QApplication.processEvents()  # Process events to update UI
 
-    def log_message(self, message):
-        self.log_signal.emit(message)
+    @pyqtSlot(str, str)
+    def append_log_message(self, message, log_level):
+
+        # Clear any existing formatting
+        cursor = self.logBox.textCursor()
+        cursor.movePosition(QTextCursor.End)
+        self.logBox.setTextCursor(cursor)
+        
+        # Set color based on log level
+        color = None
+        if log_level == 'Error':
+            color = QColor('#4cf3c1')
+        elif log_level == 'Info':
+           # color = QColor('blue')
+           color = QColor('#949599')
+        else:
+            color = QColor('white')  # or any other default color
+            return
+        
+        # Apply color to the new message
+        cursor.insertHtml(f'<font color="{color.name()}">{message}</font><br>')
+        
+        # Ensure cursor is visible and update UI
+        self.logBox.ensureCursorVisible()
+        QApplication.processEvents()    
+
+    def log_message(self, message, logLevel='debug'):
+        self.log_signal.emit(message, logLevel)
 
     # def log_message(self, message):
     #     self.logBox.append(message)
@@ -919,26 +946,26 @@ class DevWindow(QMainWindow):
         print("updateSystemState(Erase Additional Mode) : ", state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK)
         if (state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_UNKNOWN:
             self.labelState.setText("UNKNOWN")
-            self.log_message(f"MT_STATE : UNKNOWN_{state_int}")
+            self.log_message(f"MT_STATE : UNKNOWN_{state_int}",'Debug')
         elif (state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_SAFE:
             self.labelState.setText("SAFE")
-            self.log_message(f"MT_STATE : SAFE_{state_int}")
+            self.log_message(f"MT_STATE : SAFE_{state_int}",'Debug')
         elif (state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_PREARMED:
             self.labelState.setText("PREARMED")
-            self.log_message(f"MT_STATE : PREARMED_{state_int}")
+            self.log_message(f"MT_STATE : PREARMED_{state_int}",'Debug')
         elif (state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_AUTO_ENGAGE:
             self.labelState.setText("AUTO_ENGAGE")
-            self.log_message(f"MT_STATE : AUTO_ENGAGE_{state_int}")
+            self.log_message(f"MT_STATE : AUTO_ENGAGE_{state_int}",'Debug')
         elif (state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_ARMED_MANUAL:
             self.labelState.setText("ARMED_MANUAL")
-            self.log_message(f"MT_STATE : ARMED_MANUAL_{state_int}")
+            self.log_message(f"MT_STATE : ARMED_MANUAL_{state_int}",'Debug')
         elif (state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_ARMED:
             self.labelState.setText("ARMED") 
-            self.log_message(f"MT_STATE : ARMED_{state_int}")
+            self.log_message(f"MT_STATE : ARMED_{state_int}",'Debug')
         else:
             print("MT_STATE : ", state_int)
             self.labelState.setText("MT_STATE : UNEXPECTED") 
-            self.log_message(f"MT_STATE : EXCEPTION_{state_int}")
+            self.log_message(f"MT_STATE : EXCEPTION_{state_int}",'Debug')
             # self.send_state_change_request_to_server()
         
         # Emit the signal with the new state
@@ -1033,7 +1060,7 @@ class DevWindow(QMainWindow):
 
             # When MT_COMPLETE is received, skip transaction
             if (rcv_state & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK != MT_COMPLETE):
-                self.log_message(f"Received MT_STATE from Robot_{rcv_state}")
+                self.log_message(f"Received MT_STATE from Robot_{rcv_state}", 'Debug')
                 self.RcvStateCurr = rcv_state
                 self.updateSystemState()
 
@@ -1054,7 +1081,7 @@ class DevWindow(QMainWindow):
             text_data = bytearray(len_msg)
             text_data = message[8:8 + len_msg]
             text_str = ''.join(chr(byte) for byte in text_data if byte < 128)  # 바이트를 ASCII 문자로 변환
-            self.log_message(f"{text_str}")
+            self.log_message(f"{text_str}",'Debug')
 
         elif type_msg == MT_SOCKET:
             # Reference status : 
@@ -1105,7 +1132,7 @@ class DevWindow(QMainWindow):
 
     # Using heartbeat timer, in order to detect the robot control sw to set abnormal state
     def HeartBeatTimer_event(self):
-        self.log_message("Attempting to reconnect...")
+        self.log_message("Attempting to reconnect...", 'Debug')
         # # if self.check_server(self.editIPAddress.text(), self.editTCPPort.text()):
         # ip = self.editIPAddress.text()
         # port = int(self.editTCPPort.text())
@@ -1146,7 +1173,7 @@ class DevWindow(QMainWindow):
             self.set_command(LT_INC_Y)
         else:
             print("Blocking to press CT_TILTE_UP_START")
-            self.log_message(f"Blocking to press : CT_TILTE_UP_START")
+            self.log_message(f"Moving Cannon to UP..", 'Info')
     def clicked_command_down(self):
         if (self.is_client_connected() and 
             ((self.RcvStateCurr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) in (ST_ARMED_MANUAL, ST_PREARMED))):
@@ -1158,7 +1185,7 @@ class DevWindow(QMainWindow):
             self.set_command(LT_DEC_Y)
         else:
             print("Blocking to press CT_TILTE_DOWN_START")
-            self.log_message(f"Blocking to press : CT_TILTE_DOWN_START")
+            self.log_message(f"Moving Cannon to Down..", 'Info')
     def clicked_command_right(self):
         if (self.is_client_connected() and 
             ((self.RcvStateCurr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) in (ST_ARMED_MANUAL, ST_PREARMED))):
@@ -1170,7 +1197,7 @@ class DevWindow(QMainWindow):
             self.set_command(LT_INC_X)
         else:
             print("Blocking to press CT_PAN_UP_START")
-            self.log_message(f"Blocking to press : CT_PAN_UP_START")
+            self.log_message(f"Moving Cannon to Right..", 'Info')
     def clicked_command_left(self):
         if (self.is_client_connected() and 
             ((self.RcvStateCurr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) in (ST_ARMED_MANUAL, ST_PREARMED))):
@@ -1182,7 +1209,7 @@ class DevWindow(QMainWindow):
             self.set_command(LT_DEC_X)
         else:
             print("Blocking to press CT_PAN_LEFT_START")
-            self.log_message(f"Blocking to press : CT_PAN_LEFT_START")
+            self.log_message(f"Moving Cannon to Left..", 'Info')
     def clicked_command_fire(self):
         if (self.is_client_connected() and 
             (self.RcvStateCurr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK == ST_ARMED_MANUAL)):
@@ -1193,7 +1220,7 @@ class DevWindow(QMainWindow):
             self.set_command(CT_FIRE_STOP)
         else:
             print("Blocking to press CT_FIRE")
-            self.log_message(f"Blocking to press : CT_FIRE")
+            self.log_message(f"Fire!!!", 'Info')
 
     def keyPressEvent(self, event):
         if isinstance(self.RcvStateCurr, bytes):
