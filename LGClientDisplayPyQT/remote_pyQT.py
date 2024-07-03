@@ -676,6 +676,7 @@ class DevWindow(QMainWindow):
             self.checkBoxLaserEnable.setEnabled(False)
             self.buttonCalibrate.setEnabled(False)
             self.buttonStart.setText("Fire")
+            self.buttonPreArmEnable.setEnabled(True)
         # elif self.currnet_state == self.State.PREARMED:
         elif (self.RcvStateCurr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_PREARMED:
             self.comboBoxSelectMode.setEnabled(True)
