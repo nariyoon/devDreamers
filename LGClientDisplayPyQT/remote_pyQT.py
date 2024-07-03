@@ -373,6 +373,7 @@ class DevWindow(QMainWindow):
         # self.frameGraph = self.plot_widget
 
         # self.plot_widget = pg.PlotWidget()
+        # self.layoutQFrame.addWidget(self.plot_widget)
         self.layoutQFrame.addWidget(self.plot_widget)
 
         # Initialize data
@@ -382,8 +383,8 @@ class DevWindow(QMainWindow):
         self.fps_line = self.plot_widget.plot(self.fps_x, self.fps_y, pen=pg.mkPen(color='#00BCD4', width=2))
 
         # Set x-axis and y-axis range
-        self.plot_widget.setXRange(0, 100)
-        self.plot_widget.setYRange(0, 30)
+        # self.plot_widget.setXRange(0, 100)
+        # self.plot_widget.setYRange(-30, 30)
 
         # Set background color
         self.plot_widget.setBackground('#333333')
@@ -513,12 +514,12 @@ class DevWindow(QMainWindow):
         ###########################################
         ## 2안 : Switching Start to Stop         ##
         ###########################################
-        print("Auto Engage Button Pushed")
+        # print("Auto Engage Button Pushed")
         # char_array = self.get_char_array_autoengage_from_text(self.editEngageOrder)
         # self.send_target_order_to_server(char_array)
 
         current_text = self.buttonStart.text()
-        print("Auto Engage Button Pushed : ", current_text)
+        # print("Auto Engage Button Pushed : ", current_text)
         if current_text == "Fire":
             self.buttonStart.setText('Stop')  # Update button text to "STOP"
             # self.log_message(f"Auto Engage Fire Started: {self.editEngageOrder}")
@@ -539,10 +540,10 @@ class DevWindow(QMainWindow):
             self.selected_model = self.img_model_global[index]
             model_name = self.selected_model.get_name()
             self.model_changed.emit(model_name)
-            print(f"Model selected: {self.img_model_global[index].get_name()}")
+            # print(f"Model selected: {self.img_model_global[index].get_name()}")
             # print(f"on_combobox_changed_algorithm... SELECTED: {self.img_model_global[index].get_name()}")
         else:
-            print("Invalid index or model list is empty")
+            # print("Invalid index or model list is empty")
             self.selected_model = None
             
     @pyqtSlot(int)
@@ -551,11 +552,11 @@ class DevWindow(QMainWindow):
             self.selected_filter = self.img_filter_global[index]
             filter_name = self.selected_filter.get_name()
             self.filter_changed.emit(filter_name)
-            print(f"Img filter selected: {self.img_filter_global[index].get_name()}")
+            # print(f"Img filter selected: {self.img_filter_global[index].get_name()}")
             set_curr_filter(self.selected_filter)
             # # print(f"on_combobox_changed_algorithm... SELECTED: {self.img_model_global[index].get_name()}")
         else:
-            print("Invalid index or image filter list is empty")
+            # print("Invalid index or image filter list is empty")
             self.selected_filter = None
 
     def toggle_calibrate(self):
@@ -565,12 +566,12 @@ class DevWindow(QMainWindow):
             state_int = self.RcvStateCurr
 
         current_text = self.buttonCalibrate.text()
-        print("Calibrate Button Pushed : ", current_text)
+        # print("Calibrate Button Pushed : ", current_text)
 
         if current_text == "Calibrate":
             self.buttonCalibrate.setText('Cal_Off')  # Update button text to "Cal_Off"
             state_int |= ST_CALIB_ON
-            print("Current CAL_ON Status : ", state_int)
+            # print("Current CAL_ON Status : ", state_int)
             self.send_state_change_request_to_server(state_int)
             self.log_message(f"Start Calibration..", 'Info') 
             
@@ -578,7 +579,7 @@ class DevWindow(QMainWindow):
             self.buttonCalibrate.setText('Calibrate')  # Update button text to "Cal_Off"
             # state_int should be 8
             state_int &= ST_CLEAR_CALIB_MASK
-            print("Current CAL_OFF Status : ", state_int)
+            # print("Current CAL_OFF Status : ", state_int)
             self.send_state_change_request_to_server(state_int)
             self.log_message(f"Stop Calibration..", 'Info') 
 
@@ -587,13 +588,13 @@ class DevWindow(QMainWindow):
         if current_text == "Active":
             self.pre_arm_enable()  # PRE-ARMED 상태로 전환하는 함수
             # self.buttonPreArmEnable.setText('SAFE')
-            print('Try to enable Pre-Armed mode.')
+            # print('Try to enable Pre-Armed mode.')
             self.PrearmedCheckTimer.start()
             
         elif current_text == "Deactive":
             self.send_state_change_request_to_server(ST_SAFE)
             # self.buttonPreArmEnable.setText('PRE-ARMED')
-            print('Try to return Safe mode.')
+            # print('Try to return Safe mode.')
 
     @pyqtSlot()
     def connect(self):
@@ -624,14 +625,14 @@ class DevWindow(QMainWindow):
 
         # Terminate tcp_thread if it has been created
         if hasattr(self, 'tcp_thread') and self.tcp_thread.is_alive():
-            print("TCP thread is tried to be closed...")
+            # print("TCP thread is tried to be closed...")
             self.shutdown_event.set()
             self.tcp_thread.join()  
-            print("TCP thread is closed successfully.")
+            # print("TCP thread is closed successfully.")
         else:
             print("TCP thread was not active or not created.")
         
-        print("All threads are closed successfully.")
+        # print("All threads are closed successfully.")
         self.log_message("Disconnected", 'Info')
 
         # self.currnet_state = self.State.UNKNOWN
@@ -651,7 +652,7 @@ class DevWindow(QMainWindow):
         # self.buttonPreArmEnable.setEnabled(True if connected else False)
   
     def updateModeUI(self):
-        print("updateModeUI self.RcvStateCurr : ", self.RcvStateCurr)
+        # print("updateModeUI self.RcvStateCurr : ", self.RcvStateCurr)
         if (self.RcvStateCurr & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_SAFE:
         # if self.currnet_state == self.State.SAFE:
             self.comboBoxSelectMode.setEnabled(False)
@@ -712,11 +713,11 @@ class DevWindow(QMainWindow):
         else:
             state_int = self.RcvStateCurr
 
-        print("Current State : ", (state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK), " ")
+        # print("Current State : ", (state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK), " ")
 
         # if ((state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_SAFE):
         self.log_message("Send Pre-Arm Enable")
-        print("Send Pre-Arm Enable")
+        # print("Send Pre-Arm Enable")
         
         char_array = self.get_char_array_prearmed_from_text(self.editPreArmCode)
         self.send_pre_arm_code_to_server(char_array)
@@ -731,7 +732,7 @@ class DevWindow(QMainWindow):
         try:
             # Start Armed Manual 
             self.log_message(f"Laser Enabled: {self.checkBoxLaserEnable.isChecked()}")
-            print("Laser Enabled: ", {self.checkBoxLaserEnable.isChecked()})
+            # print("Laser Enabled: ", {self.checkBoxLaserEnable.isChecked()})
 
             if isinstance(self.RcvStateCurr, bytes):
                 state_int = int.from_bytes(self.RcvStateCurr, byteorder='little')
@@ -744,23 +745,23 @@ class DevWindow(QMainWindow):
                     state_int |= ST_LASER_ON
                 else:
                     state_int |= (ST_ARMED_MANUAL|ST_LASER_ON)
-                print("Current LASER_ON Status : ", state_int)
+                # print("Current LASER_ON Status : ", state_int)
                 self.send_state_change_request_to_server(state_int)
             else:
                 # state_int should be 8
                 state_int &= ST_CLEAR_LASER_MASK
-                print("Current LASER_OFF Status : ", state_int)
+                # print("Current LASER_OFF Status : ", state_int)
                 self.send_state_change_request_to_server(state_int)
 
         except Exception as e:
             self.log_message(f"Error in toggle_laser: {str(e)}")
-            print(f"Error in toggle_laser: {str(e)}")
+            # print(f"Error in toggle_laser: {str(e)}")
     
     @pyqtSlot()
     def send_calib(self):
         calibrateOn = self.buttonCalibrate.isChecked()
         self.log_message(f"Calibration Enabled: {self.buttonCalibrate.isChecked()}")
-        print("Calibration Enabled: ", {self.buttonCalibrate.isChecked()})
+        # print("Calibration Enabled: ", {self.buttonCalibrate.isChecked()})
 
         if isinstance(self.RcvStateCurr, bytes):
             state_int = int.from_bytes(self.RcvStateCurr, byteorder='little')
@@ -810,7 +811,7 @@ class DevWindow(QMainWindow):
 
             # Pack the message using the same structure as C#'s TMessageCommands
             message = struct.pack(">IIB", msg_len, msg_type, command) #make by big
-            print("set_command msg ", struct.unpack(">IIB", message)[1])
+            # print("set_command msg ", struct.unpack(">IIB", message)[1])
             # Get only msg_type
             unpacked_msg_type = struct.unpack(">IIB", message)[1] #read by little
             self.log_message(f"msg_type: {unpacked_msg_type}")
@@ -870,7 +871,7 @@ class DevWindow(QMainWindow):
             for byte in code:
                 msg.append(byte)
 
-            print("send_pre_arm_code_to_server ", ' '.join(f'0x{byte:02x}' for byte in msg))
+            # print("send_pre_arm_code_to_server ", ' '.join(f'0x{byte:02x}' for byte in msg))
             sendMsgToCannon(bytes(msg))
             return True
         return False
@@ -883,7 +884,7 @@ class DevWindow(QMainWindow):
             msg = struct.pack(">II", struct.calcsize(">I"), MT_STATE_CHANGE_REQ) # make by big
             msg += struct.pack(">I", state)
 
-            print("send_state_change_request_to_server ", ' '.join(f'0x{byte:02x}' for byte in msg))
+            # print("send_state_change_request_to_server ", ' '.join(f'0x{byte:02x}' for byte in msg))
             sendMsgToCannon(msg)
             return True
         return False
@@ -916,7 +917,7 @@ class DevWindow(QMainWindow):
             for byte in target_order:
                 msg.append(byte)
 
-            print("send_target_order_to_server ", ' '.join(f'0x{byte:02x}' for byte in msg))
+            # print("send_target_order_to_server ", ' '.join(f'0x{byte:02x}' for byte in msg))
             sendMsgToCannon(msg)
             return True
         return False
@@ -972,7 +973,7 @@ class DevWindow(QMainWindow):
         else:
             state_int = self.RcvStateCurr
 
-        print("updateSystemState(Erase Additional Mode) : ", state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK)
+        # print("updateSystemState(Erase Additional Mode) : ", state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK)
         if (state_int & ST_CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ST_UNKNOWN:
             self.labelState.setText("UNKNOWN")
             self.log_message(f"MT_STATE : UNKNOWN_{state_int}",'Debug')
@@ -992,7 +993,7 @@ class DevWindow(QMainWindow):
             self.labelState.setText("ARMED") 
             self.log_message(f"MT_STATE : ARMED_{state_int}",'Debug')
         else:
-            print("MT_STATE : ", state_int)
+            # print("MT_STATE : ", state_int)
             self.labelState.setText("MT_STATE : UNEXPECTED") 
             self.log_message(f"MT_STATE : EXCEPTION_{state_int}",'Debug')
             # self.send_state_change_request_to_server()
@@ -1047,15 +1048,15 @@ class DevWindow(QMainWindow):
 
         # Terminate tcp_thread if it has been created
         if hasattr(self, 'tcp_thread') and self.tcp_thread.is_alive():
-            print("TCP thread is tried to be closed...")
+            # print("TCP thread is tried to be closed...")
             self.shutdown_event.set()
             # self.tcp_thread.join(timeout=5)  # 최대 5초 대기
             self.tcp_thread.join()  # 최대 5초 대기
-            print("TCP thread is closed successfully.")
+            # print("TCP thread is closed successfully.")
         else:
             print("TCP thread was not active or not created.")
         
-        print("All threads are closed successfully.")
+        # print("All threads are closed successfully.")
         # super().closeEvent(event)  # 기본 종료 이벤트 수행
 
     ###################################################################
@@ -1084,7 +1085,7 @@ class DevWindow(QMainWindow):
         # 나머지 MT_MSG 들은 byte 배열이 들어오므로 bit -> little 변환이 필요함, 송신도 마찬가지
         elif type_msg == MT_STATE:
             # MT_STATE prints
-            print("MT_STATE Received :", ' '.join(f'0x{byte:02x}' for byte in message))
+            # print("MT_STATE Received :", ' '.join(f'0x{byte:02x}' for byte in message))
             rcv_state = struct.unpack(">III", message)[2]
 
             # When MT_COMPLETE is received, skip transaction
@@ -1110,7 +1111,7 @@ class DevWindow(QMainWindow):
             text_data = bytearray(len_msg)
             text_data = message[8:8 + len_msg]
             text_str = ''.join(chr(byte) for byte in text_data if byte < 128)  # 바이트를 ASCII 문자로 변환
-            self.log_message(f"{text_str}",'Debug')
+            self.log_message(f"{text_str}", 'Error')
 
         elif type_msg == MT_SOCKET:
             # Reference status : 
@@ -1119,18 +1120,18 @@ class DevWindow(QMainWindow):
             # SOCKET_CONNECTION_LOST = 2
 
             # print test
-            print("Socket Message Received", type_msg)
-            print("MT_SOCKET Received :", ' '.join(f'0x{byte:02x}' for byte in message))
+            # print("Socket Message Received", type_msg)
+            # print("MT_SOCKET Received :", ' '.join(f'0x{byte:02x}' for byte in message))
 
             socket_state = struct.unpack(">IIB", message)[2]
             socket_state = int(socket_state)
             # self.SocketState = socket_state
             # print("MT_STATE Received as", self.RcvStateCurr, " ", rcv_state)
-            print("Socket State Received", socket_state)
+            # print("Socket State Received", socket_state)
             self.updateSocketState(socket_state)
         else:
             # print test
-            print("Exception Message Received", type_msg)
+            # print("Exception Message Received", type_msg)
             print("MT_EXCEPTION Received :", ' '.join(f'0x{byte:02x}' for byte in message))
 
     ###################################################################
@@ -1141,7 +1142,7 @@ class DevWindow(QMainWindow):
         fps_text = f"Avg FPS : {rcvfps:.2f}"
         # self.fps = rcvfps
         self.update_fps_signal.emit(fps_text)
-        # self.update_fps_datasig.emit(rcvfps)
+        self.update_fps_datasig.emit(rcvfps)
 
     @pyqtSlot(str)
     def update_fps(self, fps_text):
@@ -1155,9 +1156,13 @@ class DevWindow(QMainWindow):
 
         self.fps_y = self.fps_y[1:]  # Remove the first element
         self.fps_y.append(rcvfps)  # Add a new random value
-
+        # print("Current FPS : ", rcvfps)
+        
         # Update the plot
         self.fps_line.setData(self.fps_x, self.fps_y)
+        # Ensure the plot keeps the specified x and y ranges
+        # self.plot_widget.setXRange(0, 100)
+        # self.plot_widget.setYRange(-30, 30)
 
     # Using heartbeat timer, in order to detect the robot control sw to set abnormal state
     def HeartBeatTimer_event(self):
