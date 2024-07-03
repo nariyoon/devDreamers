@@ -379,11 +379,23 @@ class DevWindow(QMainWindow):
         self.fps_x = list(range(100))
         self.fps_y = [0 for _ in range(100)]
         # Set up the plot
-        self.fps_line = self.plot_widget.plot(self.fps_x, self.fps_y, pen=pg.mkPen(color='b', width=2))
+        self.fps_line = self.plot_widget.plot(self.fps_x, self.fps_y, pen=pg.mkPen(color='#00BCD4', width=2))
 
         # Set x-axis and y-axis range
         self.plot_widget.setXRange(0, 100)
         self.plot_widget.setYRange(0, 30)
+
+        # Set background color
+        self.plot_widget.setBackground('#333333')
+
+        # Customize axis
+        self.plot_widget.getAxis('left').setPen(pg.mkPen(color='#FFFFFF'))
+        self.plot_widget.getAxis('left').setTextPen(pg.mkPen(color='#FFFFFF'))
+        self.plot_widget.getAxis('bottom').setPen(pg.mkPen(color='#FFFFFF'))
+        self.plot_widget.getAxis('bottom').setTextPen(pg.mkPen(color='#FFFFFF'))
+
+        # Set the title color
+        self.plot_widget.setTitle('FPS', color='#FFFFFF', size='12pt')
 
         self.overlayWidget.setLayout(self.layeredQVBox)
 
