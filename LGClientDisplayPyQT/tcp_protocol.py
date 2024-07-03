@@ -214,6 +214,8 @@ def tcp_ip_thread(ip, port, shutdown_event):
                     setTargetStatus(TARGET_AFTER_FIRE)
                 else:
                     sendMsgToUI(packedData)
+            elif type == MT_CALIB_COMMANDS:
+                print("buffer: ", buffer)
             else:
                 #print("len_ ", len_, "header type_ ", type_, "data_", int.from_bytes(buffer, byteorder='big'))
                 sendMsgToUI(packedData)
@@ -254,6 +256,8 @@ def buildTagetOrientation(msg):
             buffer[cnt] = i - 48
             cnt = cnt + 1
 
+    lastPan = -10
+    lastTilt = 10
     targetLabelData = get_result_model()
     if targetLabelData is not None:
         print("Target Info")
@@ -273,20 +277,18 @@ def buildTagetOrientation(msg):
                     targetNum = buffer[i]
                     sendTargetNumToUI(targetNum)
                     detectCnt = 0
-                    lastPan = -99.99
-                    lastTilt = -99.99
+                    #lastPan = -99.99
+                    #lastTilt = -99.99
                     lastX = 0
                     lastY = 0
-                    #pan = 0
-                    #tilt = 0
-                    pan = -1.5
-                    tilt = -1.5
+                    pan = 0
+                    tilt = 0
                     sameCoordinateCnt = 0
                     findCnt = 0
                     print("move to target: ", targetNum)
                     while detectCnt < 1:
                         setTargetStatus(TARGET_BEFORE_FIRE)
-                        time.sleep(0.03)
+                        time.sleep(0.04)
                         if autoEngageStop == True:
                             print("Stop ongoing fire target")
                             break
@@ -305,11 +307,12 @@ def buildTagetOrientation(msg):
                         
                         if findTarget == False:
                             findCnt += 1
-                            if findCnt > 15:
-                                print("target is not found in while loop")
-                                #break
-                            #else:
-                            #    continue
+                            if findCnt > 100:
+                                sendEmptyMsg(MT_GO_CENTER)
+                                findCnt = 0
+                                lastX = 0
+                                lastY = 0
+                                continue
 
                         centerX = 0
                         centerY = 0
@@ -339,19 +342,20 @@ def buildTagetOrientation(msg):
 
                         data.extend(struct.pack('>II', 8, MT_TARGET_DIFF))
 
-                        if getTargetStage(area) == TARGET_STATGE_1:
-                            panError = (centerX - 20) - WIDTH/2
-                            tiltError = (centerY - 40) - HEIGHT/2
-                        elif getTargetStage(area) == TARGET_STATGE_2:
-                            panError = (centerX - 20) - WIDTH/2
-                            tiltError = (centerY - 40) - HEIGHT/2
-                        elif getTargetStage(area) == TARGET_STATGE_3:
-                            panError = (centerX - 20) - WIDTH/2
-                            tiltError = (centerY - 40) - HEIGHT/2
-                        elif getTargetStage(area) == TARGET_STATGE_4:
-                            panError = (centerX - 20) - WIDTH/2
-                            tiltError = (centerY - 40) - HEIGHT/2
-                        elif getTargetStage(area) == TARGET_STATGE_5:
+                        # if getTargetStage(area) == TARGET_STATGE_1:
+                        #     panError = (centerX - 20) - WIDTH/2
+                        #     tiltError = (centerY - 40) - HEIGHT/2
+                        # elif getTargetStage(area) == TARGET_STATGE_2:
+                        #     panError = (centerX - 20) - WIDTH/2
+                        #     tiltError = (centerY - 40) - HEIGHT/2
+                        # elif getTargetStage(area) == TARGET_STATGE_3:
+                        #     panError = (centerX - 20) - WIDTH/2
+                        #     tiltError = (centerY - 40) - HEIGHT/2
+                        # elif getTargetStage(area) == TARGET_STATGE_4:
+                        #     panError = (centerX - 20) - WIDTH/2
+                        #     tiltError = (centerY - 40) - HEIGHT/2
+
+                        if getTargetStage(area) == TARGET_STATGE_5:
                             panError = (centerX - 5) - WIDTH/2
                             tiltError = (centerY - 35) - HEIGHT/2
                         else:
@@ -379,12 +383,10 @@ def buildTagetOrientation(msg):
 
                     print("sameCoordinateCnt: ", sameCoordinateCnt)
                     sameCoordinateCnt = 0
-                    if findCnt == 0:
+                    if autoEngageStop == False:
                         setTargetStatus(TARGET_FIRING)
                         sendEmptyMsg(MT_FIRE)
                         time.sleep(0.1)
-                        # targetStatus = AFTER_TARGET
-
                     break
 
         sendEmptyMsg(MT_COMPLETE)
@@ -456,7 +458,7 @@ def send_float(number):
     return uint32_val
 
 def compareCoordinate(lastPan, lastTilt, pan, tilt):
-    #print(lastPan, " ", pan, " ", lastTilt, " ", tilt)
+    print(lastPan, " ", pan, " ", lastTilt, " ", tilt)
 
     x = abs(lastPan - pan)
     y = abs(lastTilt - tilt)
@@ -503,3 +505,4 @@ def getTargetStage(area):
     
     #print("## stage ", stage, " ", area)
     return stage
+
