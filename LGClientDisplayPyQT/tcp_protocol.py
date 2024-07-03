@@ -12,6 +12,7 @@ import threading
 import time
 import queue
 from cannon_queue import *
+import copy
 
 # Define message types
 MT_COMMANDS = 1
@@ -71,8 +72,7 @@ class TMesssageHeader:
 clientSock = 0
 fps = 0
 callback_shutdown_event = 0
-targetNum = -1
-targetStatus = TARGET_NONE
+
 autoEngageStop = False
 calibPan = -99.9
 calibTilt = -99.9
@@ -181,27 +181,14 @@ def tcp_ip_thread(ip, port, shutdown_event):
             packedData = struct.pack(f'>II{len(buffer)}s', len_, type_, buffer)
 
             if type_ == MT_IMAGE:
-                image_buffer = buffer.copy()
-                # if frame_queue.full():
-                #   frame_queue.get()
-                # frame_queue.put(image_buffer)                
-
+                image_buffer = copy.deepcopy(buffer)
+    
                 if frame_stack.full():
                     frame_stack.get()
                 
-                frame_stack.put((image_buffer, targetStatus, targetNum))
+                frame_stack.put(image_buffer)
 
-
-                # Add Image Filter
-                packedData = add_image_filter(buffer)
-
-                # init_model_status = get_init_status()
-
-                # if init_model_status is None:
-                #     init_packedData = init_model_image(buffer)
-                #     sendMsgToUI(init_packedData)
-                # else:
-                #     
+                # packedData = add_image_filter(buffer)
                 sendMsgToUI(packedData)
 
                 # calculate the frame
@@ -503,18 +490,8 @@ def getFps():
     global fps
     return fps
 
-def setTargetStatus(status):
-    global targetStatus
-    targetStatus = status
-    #print("target status: ", targetStatus)
- 
-def getTargetStatus():
-    global targetStatus
-    return targetStatus
 
-def getTargetNum():
-    global targetNum
-    return targetNum
+
 
 def getTargetStage(area):
     # TARGET_STATGE_1 = 1 # 13 inch / area over 6000

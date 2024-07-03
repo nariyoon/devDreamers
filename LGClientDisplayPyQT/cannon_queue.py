@@ -34,3 +34,25 @@ def set_curr_filter(data):
 def get_curr_filter():
     global filter_index
     return filter_index
+
+
+targetNum = -1
+targetStatus = 0
+
+def setTargetStatus(status):
+    global targetStatus
+    targetStatus = status
+    #print("target status: ", targetStatus)
+ 
+def getTargetStatus():
+    global targetStatus
+    return targetStatus
+
+
+def setTargetNum(status):
+    global targetNum
+    targetNum = status
+
+def getTargetNum():
+    global targetNum
+    return targetNum
