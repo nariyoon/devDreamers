@@ -296,11 +296,15 @@ def buildTagetOrientation(msg):
                     tilt = 0
                     sameCoordinateCnt = 0
                     findCnt = 0
+                    flag = True
                     print("move to target: ", targetNum)
                     while detectCnt < 1:
                         setTargetStatus(TARGET_BEFORE_FIRE)
                         time.sleep(0.01)
-                        sendTargetNumToUI(targetNum)
+                        if flag == True:
+                            sendTargetNumToUI(targetNum)
+                            flag = False
+
                         if autoEngageStop == True:
                             print("Stop ongoing fire target")
                             break
