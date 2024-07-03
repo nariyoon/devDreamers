@@ -182,12 +182,14 @@ def tcp_ip_thread(ip, port, shutdown_event):
                 #   frame_queue.get()
                 # frame_queue.put(image_buffer)                
 
-                # Add Image Filter
-                packedData, filtered_image = add_image_filter(image_buffer)
-
                 if frame_stack.full():
                     frame_stack.get()
-                frame_stack.put((filtered_image, targetStatus, targetNum))
+                
+                frame_stack.put((image_buffer, targetStatus, targetNum))
+
+
+                # Add Image Filter
+                packedData = add_image_filter(buffer)
 
                 # init_model_status = get_init_status()
 
@@ -268,36 +270,14 @@ def buildTagetOrientation(msg):
     if targetLabelData is not None:
         print("Target Info")
         for i in range(cnt):
-            # print("Label 10 checked")
-            try:
-                result_data = box_queue.get_nowait()
-                prev_data = result_data.copy()
-            except Empty:
-                result_data = prev_data
-            found10label = check_label_10(result_data)
-
             if autoEngageStop == True:
                 print("Stop ongoing fire target")
-                break
-            elif found10label == True:
-                print("Stop ongoing fire target due to Label TEN")
                 break
 
             print("target num: ", buffer[i])
             for target in targetLabelData['target_info']:
-                # print("Label 10 checked")
-                try:
-                    result_data = box_queue.get_nowait()
-                    prev_data = result_data.copy()
-                except Empty:
-                    result_data = prev_data
-                found10label = check_label_10(result_data)
-
                 if autoEngageStop == True:
                     print("Stop ongoing fire target")
-                    break
-                elif found10label == True:
-                    print("Stop ongoing fire target due to Label TEN")
                     break
 
                 label = target.get('label', 'N/A')
@@ -319,21 +299,9 @@ def buildTagetOrientation(msg):
                     while detectCnt < 1:
                         setTargetStatus(TARGET_BEFORE_FIRE)
                         time.sleep(0.01)
-						# print("Label 10 checked")
-                        try:
-                            result_data = box_queue.get_nowait()
-                            prev_data = result_data.copy()
-                        except Empty:
-                            result_data = prev_data
-                        found10label = check_label_10(result_data)
-
                         if autoEngageStop == True:
                             print("Stop ongoing fire target")
                             break
-                        elif found10label == True:
-                            print("Stop ongoing fire target due to Label TEN")
-                            break
-
                         data = bytearray()
                         targetCenterData = get_result_model()
                         findTarget = False
@@ -432,9 +400,9 @@ def buildTagetOrientation(msg):
                         sendEmptyMsg(MT_GO_CENTER)
                     break
 
-        # Found Label == TEN
-        if found10label == True:
-            sendTextToUIFoundLabel10()
+        # # Found Label == TEN
+        # if found10label == True:
+        #     sendTextToUIFoundLabel10()
             
         sendEmptyMsg(MT_COMPLETE)
         time.sleep(3)

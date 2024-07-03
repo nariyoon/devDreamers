@@ -142,10 +142,10 @@ def add_image_filter(image):
     buffer = buffer.tobytes()
 
     len_ = len(buffer)
-    type_ = 3  # type은 3
+    type_ = 3
     packedData = struct.pack(f'>II{len_}s', len_, type_, buffer)
 
-    return packedData, filtered_image
+    return packedData
 
 
 result_data = None
@@ -290,7 +290,7 @@ def image_processing_thread(QUEUE, shutdown_event, form_instance):
             if targetStatus == 3:
                 continue
 
-            # imageMat = cv2.imdecode(np.frombuffer(imageMat, dtype=np.uint8), cv2.IMREAD_COLOR)
+            imageMat = cv2.imdecode(np.frombuffer(imageMat, dtype=np.uint8), cv2.IMREAD_COLOR)
 
             models = form_instance.get_img_model()
             if models is None:
@@ -359,7 +359,7 @@ def image_processing_thread(QUEUE, shutdown_event, form_instance):
                         target_status[str(targetNum)]['disappearance_count'] = 0
                     
 
-                    save_target_status(target_status)
+                    # save_target_status(target_status)
 
             image = cv2.cvtColor(imageMat, cv2.COLOR_BGR2RGB)
             results = hands.process(image)

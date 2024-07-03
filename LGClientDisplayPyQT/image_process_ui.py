@@ -111,11 +111,11 @@ class ImageProcessingThread(QThread):
                         painter.drawText(x1 + 2, y1 - 2, label_text)
 
                          # Draw aiming circle and crosshair for targetNum
-                        if label == str(targetNum):
+                        if label == str(targetNum) and targetStatus < 2:
                             center_x = (x1 + x2) / 2
                             center_y = (y1 + y2) / 2
                             radius = int(min(x2 - x1, y2 - y1) * 1)  # Increase size of the targeting circle
-                            aim_pen = QPen(QColor(0, 255, 0), 3)
+                            aim_pen = QPen(QColor(0, 255, 0), 2)
                             painter.setPen(aim_pen)
                             painter.drawEllipse(int(center_x) - radius, int(center_y) - radius, 2 * radius, 2 * radius)
                             painter.drawLine(int(center_x) - radius, int(center_y), int(center_x) + radius, int(center_y))
