@@ -283,7 +283,7 @@ def image_processing_thread(QUEUE, shutdown_event, form_instance):
 
     while not shutdown_event.is_set():
         try:
-            imageMat = QUEUE.get(timeout=1)
+            frame = QUEUE.get(timeout=1)
 
             # print(f"targetStatus {targetStatus} targetNum {targetNum}")
 
@@ -293,7 +293,7 @@ def image_processing_thread(QUEUE, shutdown_event, form_instance):
             # if targetStatus == 3:
             #     continue
 
-            imageMat = cv2.imdecode(np.frombuffer(imageMat, dtype=np.uint8), cv2.IMREAD_COLOR)
+            imageMat = cv2.imdecode(np.frombuffer(frame, dtype=np.uint8), cv2.IMREAD_COLOR)
 
             models = form_instance.get_img_model()
             if models is None:

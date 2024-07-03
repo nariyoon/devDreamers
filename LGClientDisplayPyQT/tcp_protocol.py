@@ -286,10 +286,10 @@ def buildTagetOrientation(msg):
                 if buffer[i] == int(label):
                     targetNum = buffer[i]
                     detectCnt = 0
-                    #lastPan = -99.99
-                    #lastTilt = -99.99
-                    lastPan = calibPan
-                    lastTilt = calibTilt
+                    lastPan = -99.99
+                    lastTilt = -99.99
+                    #lastPan = calibPan
+                    #lastTilt = calibTilt
                     lastX = 0
                     lastY = 0
                     pan = 0
