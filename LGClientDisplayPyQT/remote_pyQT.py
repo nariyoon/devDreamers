@@ -127,7 +127,7 @@ class DevWindow(QMainWindow):
 
     # Define a signal that carries a string
     update_fps_signal = pyqtSignal(str)
-    update_fps_datasig = pyqtSignal(float)
+    # update_fps_datasig = pyqtSignal(float)
 
     # # Define HeartbeatTimer Start and Stop event from other thread
     # startHeartbeat = pyqtSignal(int)  # 타이머 시작 신호
@@ -139,7 +139,7 @@ class DevWindow(QMainWindow):
         # # Event to signal transmitting disconnect by pyqtSignal because of callback transaction
         self.disconnectRequested.connect(self.handle_disconnect)
         self.update_fps_signal.connect(self.update_fps)
-        self.update_fps_datasig.connect(self.update_fpsdata)
+        # self.update_fps_datasig.connect(self.update_fpsdata)
 
 		# Event to signal the threads to shut down
         self.shutdown_event = threading.Event()
@@ -253,6 +253,7 @@ class DevWindow(QMainWindow):
         # update combobox of image filter
         self.update_filter_combobox()
         self.get_img_filter()
+        self.comboBoxChangeFilter.setEnabled(False)
 
         # setValidator
         self.editEngageOrder.setValidator(intValidator)
@@ -261,7 +262,7 @@ class DevWindow(QMainWindow):
         # setListener
         self.comboBoxSelectMode.currentIndexChanged.connect(self.on_combobox_changed_mode)
         self.comboBoxChangeAlgorithm.currentIndexChanged.connect(self.on_combobox_changed_algorithm)
-        self.comboBoxChangeFilter.currentIndexChanged.connect(self.on_combobox_changed_imgfilter)
+        # self.comboBoxChangeFilter.currentIndexChanged.connect(self.on_combobox_changed_imgfilter)
         self.buttonConnect.clicked.connect(self.connect)
         self.buttonDisconnect.clicked.connect(self.disconnect)
         self.buttonPreArmEnable.clicked.connect(self.toggle_preArm)
@@ -376,11 +377,11 @@ class DevWindow(QMainWindow):
         # self.layoutQFrame.addWidget(self.plot_widget)
         self.layoutQFrame.addWidget(self.plot_widget)
 
-        # Initialize data
-        self.fps_x = list(range(100))
-        self.fps_y = [0 for _ in range(100)]
-        # Set up the plot
-        self.fps_line = self.plot_widget.plot(self.fps_x, self.fps_y, pen=pg.mkPen(color='#00BCD4', width=2))
+        # # Initialize data
+        # self.fps_x = list(range(100))
+        # self.fps_y = [0 for _ in range(100)]
+        # # Set up the plot
+        # self.fps_line = self.plot_widget.plot(self.fps_x, self.fps_y, pen=pg.mkPen(color='#00BCD4', width=2))
 
         # Set x-axis and y-axis range
         # self.plot_widget.setXRange(0, 100)
@@ -389,14 +390,14 @@ class DevWindow(QMainWindow):
         # Set background color
         self.plot_widget.setBackground('#333333')
 
-        # Customize axis
-        self.plot_widget.getAxis('left').setPen(pg.mkPen(color='#FFFFFF'))
-        self.plot_widget.getAxis('left').setTextPen(pg.mkPen(color='#FFFFFF'))
-        self.plot_widget.getAxis('bottom').setPen(pg.mkPen(color='#FFFFFF'))
-        self.plot_widget.getAxis('bottom').setTextPen(pg.mkPen(color='#FFFFFF'))
+        # # Customize axis
+        # self.plot_widget.getAxis('left').setPen(pg.mkPen(color='#FFFFFF'))
+        # self.plot_widget.getAxis('left').setTextPen(pg.mkPen(color='#FFFFFF'))
+        # self.plot_widget.getAxis('bottom').setPen(pg.mkPen(color='#FFFFFF'))
+        # self.plot_widget.getAxis('bottom').setTextPen(pg.mkPen(color='#FFFFFF'))
 
-        # Set the title color
-        self.plot_widget.setTitle('FPS', color='#FFFFFF', size='12pt')
+        # # Set the title color
+        # self.plot_widget.setTitle('FPS', color='#FFFFFF', size='12pt')
 
         self.overlayWidget.setLayout(self.layeredQVBox)
 
@@ -560,16 +561,17 @@ class DevWindow(QMainWindow):
             
     @pyqtSlot(int)
     def on_combobox_changed_imgfilter(self, index):
-        if 0 <= index < len(self.img_filter_global):
-            self.selected_filter = self.img_filter_global[index]
-            filter_name = self.selected_filter.get_name()
-            self.filter_changed.emit(filter_name)
-            # print(f"Img filter selected: {self.img_filter_global[index].get_name()}")
-            set_curr_filter(self.selected_filter)
-            # # print(f"on_combobox_changed_algorithm... SELECTED: {self.img_model_global[index].get_name()}")
-        else:
-            # print("Invalid index or image filter list is empty")
-            self.selected_filter = None
+        # if 0 <= index < len(self.img_filter_global):
+        #     self.selected_filter = self.img_filter_global[index]
+        #     filter_name = self.selected_filter.get_name()
+        #     self.filter_changed.emit(filter_name)
+        #     # print(f"Img filter selected: {self.img_filter_global[index].get_name()}")
+        #     set_curr_filter(self.selected_filter)
+        #     # # print(f"on_combobox_changed_algorithm... SELECTED: {self.img_model_global[index].get_name()}")
+        # else:
+        #     # print("Invalid index or image filter list is empty")
+        #     self.selected_filter = None
+        self.selected_filter = None
 
     def toggle_calibrate(self):
         if isinstance(self.RcvStateCurr, bytes):
@@ -645,14 +647,19 @@ class DevWindow(QMainWindow):
             self.shutdown_event.set()
             self.tcp_thread.join()  
             # print("TCP thread is closed successfully.")
-            self.set_image_from_path(".\\resources\\load_dreamer.gif")
+
+            # script_dir = os.path.dirname(os.path.realpath(__file__))
+            # ui_file_path = os.path.join(script_dir, '\\resources\\load_dreamer.gif')
+            # self.set_image_from_path('\\resources\\load_dreamer.gif')
         else:
             print("TCP thread was not active or not created.")
         
         # print("All threads are closed successfully.")
+        # script_dir = os.path.dirname(os.path.realpath(__file__))
+        # ui_file_path = os.path.join(script_dir, '\\resources\\load_dreamer.gif')
+        # self.set_image_from_path('\\resources\\load_dreamer.gif')
         self.log_message("Disconnected", 'Info')
-        self.set_image_from_path(".\\resources\\load_dreamer.gif")
-
+        
         # self.currnet_state = self.State.UNKNOWN
         # self.currnet_state = self.State.UNKNOWN
         self.shutdown_event.clear()
@@ -1152,7 +1159,9 @@ class DevWindow(QMainWindow):
             # print test
             # print("Exception Message Received", type_msg)
             print("MT_EXCEPTION Received :", ' '.join(f'0x{byte:02x}' for byte in message))
-            self.set_image_from_path(".\\resources\\load_dreamer.gif")
+            # script_dir = os.path.dirname(os.path.realpath(__file__))
+            # ui_file_path = os.path.join(script_dir, '\\resources\\load_dreamer.gif')
+            # self.set_image_from_path('\\resources\\load_dreamer.gif')
 
     ###################################################################
     # callback_fps : Print fps in MainWnd
@@ -1162,27 +1171,27 @@ class DevWindow(QMainWindow):
         fps_text = f"Avg FPS : {rcvfps:.2f}"
         # self.fps = rcvfps
         self.update_fps_signal.emit(fps_text)
-        self.update_fps_datasig.emit(rcvfps)
+        # self.update_fps_datasig.emit(rcvfps)
 
     @pyqtSlot(str)
     def update_fps(self, fps_text):
         self.fps.setText(fps_text)
         
-    @pyqtSlot(float)
-    def update_fpsdata(self, rcvfps):
-        # Update data
-        self.fps_x = self.fps_x[1:]  # Remove the first element
-        self.fps_x.append(self.fps_x[-1] + 1)  # Add a new element
+    # @pyqtSlot(float)
+    # def update_fpsdata(self, rcvfps):
+    #     # Update data
+    #     self.fps_x = self.fps_x[1:]  # Remove the first element
+    #     self.fps_x.append(self.fps_x[-1] + 1)  # Add a new element
 
-        self.fps_y = self.fps_y[1:]  # Remove the first element
-        self.fps_y.append(rcvfps)  # Add a new random value
-        # print("Current FPS : ", rcvfps)
+    #     self.fps_y = self.fps_y[1:]  # Remove the first element
+    #     self.fps_y.append(rcvfps)  # Add a new random value
+    #     # print("Current FPS : ", rcvfps)
         
-        # Update the plot
-        self.fps_line.setData(self.fps_x, self.fps_y)
-        # Ensure the plot keeps the specified x and y ranges
-        # self.plot_widget.setXRange(0, 100)
-        # self.plot_widget.setYRange(-30, 30)
+    #     # Update the plot
+    #     self.fps_line.setData(self.fps_x, self.fps_y)
+    #     # Ensure the plot keeps the specified x and y ranges
+    #     # self.plot_widget.setXRange(0, 100)
+    #     # self.plot_widget.setYRange(-30, 30)
 
     # Using heartbeat timer, in order to detect the robot control sw to set abnormal state
     def HeartBeatTimer_event(self):
@@ -1199,8 +1208,8 @@ class DevWindow(QMainWindow):
         #     print("Server check failed, will retry in 10 seconds.")
 
     def PrearmedCheckTimer_event(self):
-        # if self.RcvStateCurr != ST_PREARMED:
-        #     self.log_message("Pre-armed password is not correct.", 'Error')
+        if self.RcvStateCurr != ST_PREARMED:
+            self.log_message("Pre-armed password is not correct.", 'Error')
         self.PrearmedCheckTimer.stop()
 
     def check_server(self, ip, port):
