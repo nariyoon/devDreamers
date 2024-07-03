@@ -74,6 +74,8 @@ callback_shutdown_event = 0
 targetNum = -1
 targetStatus = TARGET_NONE
 autoEngageStop = False
+calibPan = -99.9
+calibTilt = -99.9
 
 # Define for updating image to UI
 uimsg_update_callback = None
@@ -133,6 +135,8 @@ def tcp_ip_thread(ip, port, shutdown_event):
 
     # while True:
     global fps
+    global calibPan
+    global calibTilt
     frameCnt = 0
     startTime = time.time()
     while not shutdown_event.is_set() and callback_shutdown_event == 0:
@@ -217,7 +221,16 @@ def tcp_ip_thread(ip, port, shutdown_event):
                 else:
                     sendMsgToUI(packedData)
             elif type == MT_CALIB_COMMANDS:
-                print("buffer: ", buffer)
+                #print("len_ ", len_, "header type_ ", type_, "data_", buffer)
+                #print("buffer: ", buffer)
+                panInt = int.from_bytes(buffer[:4], byteorder='big')
+                panfloat = struct.pack('>I', panInt)
+                calibPan = struct.unpack('>f', panfloat)[0]
+
+                tiltInt = int.from_bytes(buffer[4:], byteorder='big')
+                tiltfloat = struct.pack('>I', tiltInt)
+                calibTilt = struct.unpack('>f', tiltfloat)[0]
+                print(calibPan, " ", calibTilt)
             else:
                 #print("len_ ", len_, "header type_ ", type_, "data_", int.from_bytes(buffer, byteorder='big'))
                 sendMsgToUI(packedData)
@@ -257,6 +270,8 @@ def buildTagetOrientation(msg):
     global clientSock
     global autoEngageStop
     global targetNum
+    global calibPan
+    global calibTilt
 
     cnt = 0
     buffer = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
@@ -283,12 +298,11 @@ def buildTagetOrientation(msg):
                 label = target.get('label', 'N/A')
                 if buffer[i] == int(label):
                     targetNum = buffer[i]
-                    sendTargetNumToUI(targetNum)
                     detectCnt = 0
                     #lastPan = -99.99
                     #lastTilt = -99.99
-                    lastPan = 0
-                    lastTilt = 0
+                    lastPan = calibPan
+                    lastTilt = calibTilt
                     lastX = 0
                     lastY = 0
                     pan = 0
@@ -299,6 +313,7 @@ def buildTagetOrientation(msg):
                     while detectCnt < 1:
                         setTargetStatus(TARGET_BEFORE_FIRE)
                         time.sleep(0.01)
+                        sendTargetNumToUI(targetNum)
                         if autoEngageStop == True:
                             print("Stop ongoing fire target")
                             break
@@ -334,8 +349,8 @@ def buildTagetOrientation(msg):
                             else:
                                 centerY = value
 
-                        if sameCoordinateCnt > 700:
-                            print("same coordinate count over 700, move to center")
+                        if sameCoordinateCnt > 800:
+                            print("same coordinate count over 800, move to center")
                             sendEmptyMsg(MT_GO_CENTER)
                             sameCoordinateCnt = 0
                             lastX = 0
@@ -352,31 +367,30 @@ def buildTagetOrientation(msg):
 
                         data.extend(struct.pack('>II', 8, MT_TARGET_DIFF))
 
-                        # if getTargetStage(area) == TARGET_STATGE_1:
-                        #     panError = (centerX - 20) - WIDTH/2
-                        #     tiltError = (centerY - 40) - HEIGHT/2
-                        # elif getTargetStage(area) == TARGET_STATGE_2:
-                        #     panError = (centerX - 20) - WIDTH/2
-                        #     tiltError = (centerY - 40) - HEIGHT/2
-                        # elif getTargetStage(area) == TARGET_STATGE_3:
-                        #     panError = (centerX - 20) - WIDTH/2
-                        #     tiltError = (centerY - 40) - HEIGHT/2
-                        # elif getTargetStage(area) == TARGET_STATGE_4:
-                        #     panError = (centerX - 20) - WIDTH/2
-                        #     tiltError = (centerY - 40) - HEIGHT/2
-
-                        if getTargetStage(area) == TARGET_STATGE_5:
-                            panError = (centerX - 5) - WIDTH/2
+                        if getTargetStage(area) == TARGET_STATGE_1:
+                            panError = (centerX - 20) - WIDTH/2
+                            tiltError = (centerY - 40) - HEIGHT/2
+                        elif getTargetStage(area) == TARGET_STATGE_2:
+                            panError = (centerX - 20) - WIDTH/2
+                            tiltError = (centerY - 40) - HEIGHT/2
+                        elif getTargetStage(area) == TARGET_STATGE_3:
+                            panError = (centerX - 10) - WIDTH/2
+                            tiltError = (centerY - 50) - HEIGHT/2
+                        elif getTargetStage(area) == TARGET_STATGE_4:
+                            panError = (centerX + 5) - WIDTH/2
                             tiltError = (centerY - 35) - HEIGHT/2
+                        elif getTargetStage(area) == TARGET_STATGE_5:
+                            panError = (centerX + 5) - WIDTH/2
+                            tiltError = (centerY - 30) - HEIGHT/2
                         else:
                             panError = (centerX - 20) - WIDTH/2
                             tiltError = (centerY - 40) - HEIGHT/2
 
-                        pan = pan - panError/75
+                        pan = pan - panError/65
                         convertValue = send_float(pan)
                         data.extend(struct.pack('>I', convertValue))
 
-                        tilt = tilt - tiltError/75
+                        tilt = tilt - tiltError/65
                         convertValue = send_float(tilt)
                         data.extend(struct.pack('>I', convertValue))
 
@@ -396,8 +410,8 @@ def buildTagetOrientation(msg):
                     if autoEngageStop == False:
                         setTargetStatus(TARGET_FIRING)
                         sendEmptyMsg(MT_FIRE)
-                        time.sleep(0.2)
-                        sendEmptyMsg(MT_GO_CENTER)
+                        time.sleep(0.1)
+                        #sendEmptyMsg(MT_GO_CENTER)
                     break
 
         # # Found Label == TEN
