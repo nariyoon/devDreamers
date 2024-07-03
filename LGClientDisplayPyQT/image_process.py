@@ -277,9 +277,9 @@ def image_processing_thread(QUEUE, shutdown_event, form_instance):
 
 
     target_status = {}
-    disappearance_threshold = 3
-    movement_threshold = 5
-    direction_threshold = 20
+    disappearance_threshold = 2
+    movement_threshold = 4
+    direction_threshold = 50
 
     while not shutdown_event.is_set():
         try:
