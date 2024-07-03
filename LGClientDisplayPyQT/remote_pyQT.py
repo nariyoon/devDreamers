@@ -364,6 +364,8 @@ class DevWindow(QMainWindow):
         # Create a plot widget
         self.framegraph = QFrame(self.frameGraph)
         self.layoutQFrame = QVBoxLayout(self.framegraph)
+        self.layoutQFrame.setContentsMargins(0, 0, 0, 0)
+        
         # self.framegraph = self.findChild(QFrame, 'framegraph')
 
         # QVBoxLayout 생성하여 QFrame에 설정
@@ -388,18 +390,16 @@ class DevWindow(QMainWindow):
     def setHitResult(self, result, targetNumber): 
         if result:
             result_text = 'HIT'
-            text_color = 'red'
-            history_color = 'red'  # Example color for HIT in history
+            history_color = '#FF5252'  # Example color for HIT in history
             font_size = '26px'  # Example font size for HIT in history
             font_weight = 'bold'  # Example font weight for HIT in history
         else:
             result_text = 'MISS'
-            text_color = 'green'
+            text_color = '#8BC34A'
             history_color = 'green'  # Example color for MISS in history
             font_size = '24px'  # Example font size for MISS in history
             font_weight = 'normal'  # Example font weight for MISS in history
         
-
         history_text = f'<font color="{history_color}" style="font-weight: {font_weight};">{targetNumber} >> {result_text}</font>'
 
         hit_result_text = f'<font color="{history_color}" size="{font_size}" style="font-weight: {font_weight};"> {targetNumber}: {result_text}</font>'
@@ -688,6 +688,7 @@ class DevWindow(QMainWindow):
             self.buttonPreArmEnable.setEnabled(False)
         # self.comboBoxChangeAlgorithm
         self.labelState.setAlignment(Qt.AlignCenter)
+        self.fps.setAlignment(Qt.AlignCenter)
 
     @pyqtSlot()
     def pre_arm_enable(self):

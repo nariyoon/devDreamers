@@ -6,19 +6,19 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1260</width>
+    <width>1250</width>
     <height>860</height>
    </rect>
   </property>
   <property name="minimumSize">
    <size>
-    <width>1260</width>
+    <width>1250</width>
     <height>860</height>
    </size>
   </property>
   <property name="maximumSize">
    <size>
-    <width>1260</width>
+    <width>1250</width>
     <height>860</height>
    </size>
   </property>
@@ -395,9 +395,9 @@
    <widget class="QWidget" name="verticalLayoutWidget">
     <property name="geometry">
      <rect>
-      <x>980</x>
+      <x>970</x>
       <y>10</y>
-      <width>271</width>
+      <width>281</width>
       <height>841</height>
      </rect>
     </property>
@@ -413,7 +413,6 @@
        <property name="font">
         <font>
          <pointsize>26</pointsize>
-         <weight>75</weight>
          <bold>true</bold>
         </font>
        </property>
@@ -421,8 +420,8 @@
         <bool>false</bool>
        </property>
        <property name="styleSheet">
-        <string notr="true">background-color: #e29b6f;
-color: #FBFBFB</string>
+        <string notr="true">background-color: #FF6B6B;
+color: #FFFFFF</string>
        </property>
        <property name="text">
         <string>Auto Engaged</string>
@@ -434,13 +433,12 @@ color: #FBFBFB</string>
        <property name="maximumSize">
         <size>
          <width>16777215</width>
-         <height>50</height>
+         <height>60</height>
         </size>
        </property>
        <property name="font">
         <font>
-         <pointsize>15</pointsize>
-         <weight>75</weight>
+         <pointsize>16</pointsize>
          <bold>true</bold>
         </font>
        </property>
@@ -448,8 +446,8 @@ color: #FBFBFB</string>
         <bool>false</bool>
        </property>
        <property name="styleSheet">
-        <string notr="true">background-color: #1ca64c;
-color: #FBFBFB</string>
+        <string notr="true">background-color: #4CAF50;
+color: #FFFFFF</string>
        </property>
        <property name="text">
         <string>Avg FPS : N/A</string>
@@ -480,12 +478,18 @@ color: #FBFBFB</string>
          <height>230</height>
         </size>
        </property>
+       <property name="styleSheet">
+        <string notr="true">background-color: #444444</string>
+       </property>
        <property name="html">
         <string>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
-&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
+&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;meta charset=&quot;utf-8&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
 p, li { white-space: pre-wrap; }
-&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'Gulim'; font-size:9pt; font-weight:400; font-style:normal;&quot;&gt;
-&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-family:'.AppleSystemUIFont'; font-size:13pt;&quot;&gt;Hit Result History&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+hr { height: 1px; border-width: 0; }
+li.unchecked::marker { content: &quot;\2610&quot;; }
+li.checked::marker { content: &quot;\2612&quot;; }
+&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'.AppleSystemUIFont'; font-size:13pt; font-weight:400; font-style:normal;&quot;&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; color:#ffffff;&quot;&gt;Hit Result History&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
        </property>
       </widget>
      </item>
@@ -501,7 +505,7 @@ p, li { white-space: pre-wrap; }
         <property name="geometry">
          <rect>
           <x>100</x>
-          <y>10</y>
+          <y>0</y>
           <width>70</width>
           <height>70</height>
          </rect>
@@ -521,7 +525,7 @@ p, li { white-space: pre-wrap; }
         <property name="geometry">
          <rect>
           <x>100</x>
-          <y>90</y>
+          <y>70</y>
           <width>70</width>
           <height>70</height>
          </rect>
@@ -541,7 +545,7 @@ p, li { white-space: pre-wrap; }
         <property name="geometry">
          <rect>
           <x>180</x>
-          <y>90</y>
+          <y>70</y>
           <width>70</width>
           <height>70</height>
          </rect>
@@ -561,7 +565,7 @@ p, li { white-space: pre-wrap; }
         <property name="geometry">
          <rect>
           <x>20</x>
-          <y>90</y>
+          <y>70</y>
           <width>70</width>
           <height>70</height>
          </rect>
@@ -581,7 +585,7 @@ p, li { white-space: pre-wrap; }
         <property name="geometry">
          <rect>
           <x>100</x>
-          <y>170</y>
+          <y>140</y>
           <width>70</width>
           <height>70</height>
          </rect>
