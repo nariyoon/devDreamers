@@ -221,7 +221,7 @@ def tcp_ip_thread(ip, port, shutdown_event):
                 sendMsgToUI(packedData)
 
         except socket.timeout:
-            print("At tcp_protocol thread check : ", shutdown_event.is_set())
+            # print("At tcp_protocol thread check : ", shutdown_event.is_set())
             continue  # For non-blocking mode when using recv(), we set timeout thus continuing recv()
         except socket.error as e:
             print(f"Network error occurred: {e}")
@@ -241,6 +241,13 @@ def sendEmptyMsg(msg):
     print("sendEmptyMsg : ", msg)
     clientSock.sendall(data)
 
+def check_label_10(result_data):
+    # for box_info in result_data:    
+    #     for box in box_info:
+    #         if box["label"] == "10":
+    #             return True
+    return False
+
 def buildTagetOrientation(msg):
     print("target sequence: ", msg)
 
@@ -251,6 +258,7 @@ def buildTagetOrientation(msg):
 
     cnt = 0
     buffer = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    prev_data = []
     for i in msg:
         if i != 0:
             buffer[cnt] = i - 48
@@ -260,14 +268,36 @@ def buildTagetOrientation(msg):
     if targetLabelData is not None:
         print("Target Info")
         for i in range(cnt):
+            # print("Label 10 checked")
+            try:
+                result_data = box_queue.get_nowait()
+                prev_data = result_data.copy()
+            except Empty:
+                result_data = prev_data
+            found10label = check_label_10(result_data)
+
             if autoEngageStop == True:
                 print("Stop ongoing fire target")
+                break
+            elif found10label == True:
+                print("Stop ongoing fire target due to Label TEN")
                 break
 
             print("target num: ", buffer[i])
             for target in targetLabelData['target_info']:
+                # print("Label 10 checked")
+                try:
+                    result_data = box_queue.get_nowait()
+                    prev_data = result_data.copy()
+                except Empty:
+                    result_data = prev_data
+                found10label = check_label_10(result_data)
+
                 if autoEngageStop == True:
                     print("Stop ongoing fire target")
+                    break
+                elif found10label == True:
+                    print("Stop ongoing fire target due to Label TEN")
                     break
 
                 label = target.get('label', 'N/A')
@@ -289,9 +319,21 @@ def buildTagetOrientation(msg):
                     while detectCnt < 1:
                         setTargetStatus(TARGET_BEFORE_FIRE)
                         time.sleep(0.01)
+						# print("Label 10 checked")
+                        try:
+                            result_data = box_queue.get_nowait()
+                            prev_data = result_data.copy()
+                        except Empty:
+                            result_data = prev_data
+                        found10label = check_label_10(result_data)
+
                         if autoEngageStop == True:
                             print("Stop ongoing fire target")
                             break
+                        elif found10label == True:
+                            print("Stop ongoing fire target due to Label TEN")
+                            break
+
                         data = bytearray()
                         targetCenterData = get_result_model()
                         findTarget = False
@@ -390,6 +432,10 @@ def buildTagetOrientation(msg):
                         sendEmptyMsg(MT_GO_CENTER)
                     break
 
+        # Found Label == TEN
+        if found10label == True:
+            sendTextToUIFoundLabel10()
+            
         sendEmptyMsg(MT_COMPLETE)
         time.sleep(3)
         sendEmptyMsg(MT_GO_CENTER)
@@ -440,6 +486,14 @@ def sendTargetNumToUI(targetNum):
     packedData = struct.pack(f'>II{len_}s', len_, type_, encoded_buffer)
     sendMsgToUI(packedData)
 
+def sendTextToUIFoundLabel10():
+    buffer = f"Abnormal Target Detected"
+    encoded_buffer = buffer.encode('utf-8')
+    len_ = len(buffer)
+    type_ = MT_TEXT
+    packedData = struct.pack(f'>II{len_}s', len_, type_, encoded_buffer)
+    sendMsgToUI(packedData)
+    
 def buildTargetOrientationThread(shutdown_event):
     while not shutdown_event.is_set(): # and callback_shutdown_event == 0:
         try:

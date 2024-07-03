@@ -195,7 +195,7 @@ class DevWindow(QMainWindow):
         # self.stopHeartbeat.connect(self.HeartbeatTimer.stop)
         self.PrearmedCheckTimer = QTimer(self)
         self.PrearmedCheckTimer.timeout.connect(self.PrearmedCheckTimer_event)
-        self.PrearmedCheckTimer.setInterval(1000)  # 1초 (1000 밀리초) 간격으로 타이머 설정
+        self.PrearmedCheckTimer.setInterval(3000)  # 3초 (3000 밀리초) 간격으로 타이머 설정
 
         self.show()
 
