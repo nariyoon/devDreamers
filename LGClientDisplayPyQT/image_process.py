@@ -287,8 +287,8 @@ def image_processing_thread(QUEUE, shutdown_event, form_instance):
 
             # print(f"targetStatus {targetStatus} targetNum {targetNum}")
 
-            targetStatus = getTargetStatus()
-            targetNum = getTargetNum()
+            # targetStatus = getTargetStatus()
+            # targetNum = getTargetNum()
 
             # if targetStatus == 3:
             #     continue
@@ -331,38 +331,38 @@ def image_processing_thread(QUEUE, shutdown_event, form_instance):
                     "center": [center_x, center_y],
                 })
 
-                if targetStatus == 2 and label == str(targetNum):
-                    if label not in target_status:
-                        target_status[label] = {
-                            'disappearance_count': 0,
-                            'last_position': (center_x, center_y),
-                            'movement': 'stationary'
-                        }
-                    elif target_status[label]['movement'] != 'hit':
-                        prev_center_x, prev_center_y = target_status[label]['last_position']
-                        displacement = np.sqrt((center_x - prev_center_x) ** 2 + (center_y - prev_center_y) ** 2)
+            #     if targetStatus == 2 and label == str(targetNum):
+            #         if label not in target_status:
+            #             target_status[label] = {
+            #                 'disappearance_count': 0,
+            #                 'last_position': (center_x, center_y),
+            #                 'movement': 'stationary'
+            #             }
+            #         elif target_status[label]['movement'] != 'hit':
+            #             prev_center_x, prev_center_y = target_status[label]['last_position']
+            #             displacement = np.sqrt((center_x - prev_center_x) ** 2 + (center_y - prev_center_y) ** 2)
 
-                        if displacement > movement_threshold:
-                            target_status[label]['movement'] = 'hit'
-                        elif abs(center_x - prev_center_x) > direction_threshold or abs(center_y - prev_center_y) > direction_threshold:
-                            target_status[label]['movement'] = 'moving'
-                        else:
-                            target_status[label]['movement'] = 'stationary'
+            #             if displacement > movement_threshold:
+            #                 target_status[label]['movement'] = 'hit'
+            #             elif abs(center_x - prev_center_x) > direction_threshold or abs(center_y - prev_center_y) > direction_threshold:
+            #                 target_status[label]['movement'] = 'moving'
+            #             else:
+            #                 target_status[label]['movement'] = 'stationary'
 
-                        target_status[label]['last_position'] = (center_x, center_y)
-                        target_status[label]['disappearance_count'] = 0
+            #             target_status[label]['last_position'] = (center_x, center_y)
+            #             target_status[label]['disappearance_count'] = 0
 
-            if targetStatus == 2:
-                if str(targetNum) in target_status:
-                    if not any(t['label'] == str(targetNum) for t in target_info):
-                        target_status[str(targetNum)]['disappearance_count'] += 1
-                        if target_status[str(targetNum)]['disappearance_count'] > disappearance_threshold:
-                            target_status[str(targetNum)]['movement'] = 'hit'
-                    else:
-                        target_status[str(targetNum)]['disappearance_count'] = 0
+            # if targetStatus == 2:
+            #     if str(targetNum) in target_status:
+            #         if not any(t['label'] == str(targetNum) for t in target_info):
+            #             target_status[str(targetNum)]['disappearance_count'] += 1
+            #             if target_status[str(targetNum)]['disappearance_count'] > disappearance_threshold:
+            #                 target_status[str(targetNum)]['movement'] = 'hit'
+            #         else:
+            #             target_status[str(targetNum)]['disappearance_count'] = 0
                     
 
-                    save_target_status(target_status)
+            #         save_target_status(target_status)
 
             image = cv2.cvtColor(imageMat, cv2.COLOR_BGR2RGB)
             results = hands.process(image)
