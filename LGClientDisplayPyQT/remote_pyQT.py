@@ -8,7 +8,7 @@ import re
 from enum import Enum
 import numpy as np
 import pyqtgraph as pg
-from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QCheckBox, QLabel, QLineEdit, QTextEdit, QVBoxLayout, QGridLayout, QWidget, QMessageBox
+from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QCheckBox, QLabel, QLineEdit, QTextEdit, QVBoxLayout, QGridLayout, QWidget, QMessageBox, QFrame
 from PyQt5.QtGui import QPixmap, QIntValidator, QIcon, QMovie, QTextCursor, QColor
 from PyQt5.QtCore import pyqtSignal, pyqtSlot, Qt, QTimer, QMetaObject, Q_ARG, QObject
 from usermodel.usermodel import UserModel
@@ -92,7 +92,7 @@ class DevWindow(QMainWindow):
     SocketState = SOCKET_CONNECTION_LOST
     
     # Model : RcsState
-    RcvStateCurr = ST_UNKNOWN
+    # RcvStateCurr = ST_UNKNOWN
     # RcvStatePrev = ST_UNKNOWN
     # RcvStateRequested = ST_UNKNOWN
 
@@ -127,7 +127,7 @@ class DevWindow(QMainWindow):
 
     # Define a signal that carries a string
     update_fps_signal = pyqtSignal(str)
-    # update_fps_datasig = pyqtSignal(float)
+    update_fps_datasig = pyqtSignal(float)
 
     # # Define HeartbeatTimer Start and Stop event from other thread
     # startHeartbeat = pyqtSignal(int)  # 타이머 시작 신호
@@ -139,7 +139,7 @@ class DevWindow(QMainWindow):
         # # Event to signal transmitting disconnect by pyqtSignal because of callback transaction
         self.disconnectRequested.connect(self.handle_disconnect)
         self.update_fps_signal.connect(self.update_fps)
-        # self.update_fps_datasig.connect(self.update_fpsdata)
+        self.update_fps_datasig.connect(self.update_fpsdata)
 
 		# Event to signal the threads to shut down
         self.shutdown_event = threading.Event()
@@ -361,14 +361,27 @@ class DevWindow(QMainWindow):
         self.pictureBox.setAlignment(Qt.AlignCenter)
         self.layeredQVBox.addWidget(self.pictureBox)
 
-        # # Create a plot widget
+        # Create a plot widget
+        self.framegraph = QFrame(self.frameGraph)
+        self.layoutQFrame = QVBoxLayout(self.framegraph)
+        # self.framegraph = self.findChild(QFrame, 'framegraph')
+
+        # QVBoxLayout 생성하여 QFrame에 설정
+        self.plot_widget = pg.PlotWidget()
+        # self.frameGraph = self.plot_widget
+
         # self.plot_widget = pg.PlotWidget()
-        # self.layeredQVBox.addWidget(self.plot_widget)
-        # # Initialize data
-        # self.fps_x = list(range(100))
-        # self.fps_y = [0 for _ in range(100)]
-        # # Set up the plot
-        # self.fps_line = self.plot_widget.plot(self.fps_x, self.fps_y, pen=pg.mkPen(color='b', width=2))
+        self.layoutQFrame.addWidget(self.plot_widget)
+
+        # Initialize data
+        self.fps_x = list(range(100))
+        self.fps_y = [0 for _ in range(100)]
+        # Set up the plot
+        self.fps_line = self.plot_widget.plot(self.fps_x, self.fps_y, pen=pg.mkPen(color='b', width=2))
+
+        # Set x-axis and y-axis range
+        self.plot_widget.setXRange(0, 100)
+        self.plot_widget.setYRange(0, 30)
 
         self.overlayWidget.setLayout(self.layeredQVBox)
 
@@ -592,6 +605,11 @@ class DevWindow(QMainWindow):
 
     @pyqtSlot()
     def handle_disconnect(self):
+        # Update Current Rcv State
+        self.RcvStateCurr = ST_UNKNOWN
+        self.setAllUIEnabled(False, False)
+        self.updateSystemState()
+
         # Terminate tcp_thread if it has been created
         if hasattr(self, 'tcp_thread') and self.tcp_thread.is_alive():
             print("TCP thread is tried to be closed...")
@@ -603,11 +621,9 @@ class DevWindow(QMainWindow):
         
         print("All threads are closed successfully.")
         self.log_message("Disconnected")
+
         # self.currnet_state = self.State.UNKNOWN
         # self.currnet_state = self.State.UNKNOWN
-        self.RcvStateCurr = ST_UNKNOWN
-        self.setAllUIEnabled(False, False)
-        self.updateSystemState()
         self.shutdown_event.clear()
 
     def setAllUIEnabled(self, connected, preArmed):
@@ -1118,17 +1134,17 @@ class DevWindow(QMainWindow):
     def update_fps(self, fps_text):
         self.fps.setText(fps_text)
         
-    # @pyqtSlot(float)
-    # def update_fpsdata(self, rcvfps):
-    #     # Update data
-    #     self.fps_x = self.fps_x[1:]  # Remove the first element
-    #     self.fps_x.append(self.fps_x[-1] + 1)  # Add a new element
+    @pyqtSlot(float)
+    def update_fpsdata(self, rcvfps):
+        # Update data
+        self.fps_x = self.fps_x[1:]  # Remove the first element
+        self.fps_x.append(self.fps_x[-1] + 1)  # Add a new element
 
-    #     self.fps_y = self.fps_y[1:]  # Remove the first element
-    #     self.fps_y.append(rcvfps)  # Add a new random value
+        self.fps_y = self.fps_y[1:]  # Remove the first element
+        self.fps_y.append(rcvfps)  # Add a new random value
 
-    #     # Update the plot
-    #     self.fps_line.setData(self.fps_x, self.fps_y)
+        # Update the plot
+        self.fps_line.setData(self.fps_x, self.fps_y)
 
     # Using heartbeat timer, in order to detect the robot control sw to set abnormal state
     def HeartBeatTimer_event(self):
