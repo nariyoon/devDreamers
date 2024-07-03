@@ -590,7 +590,7 @@ class DevWindow(QMainWindow):
         self.log_message(f"Connecting to {ip}:{port}", "Info")
 
         if hasattr(self, 'tcp_thread') and self.tcp_thread.is_alive():
-            self.log_message("Already connected, disconnect first.")
+            self.log_message("There is a connection problem. Please rerun the program.", 'Error')
             return
         
         # self.shutdown_tcpevent = threading.Event()  # add for shutdown of event
@@ -620,7 +620,7 @@ class DevWindow(QMainWindow):
             print("TCP thread was not active or not created.")
         
         print("All threads are closed successfully.")
-        self.log_message("Disconnected")
+        self.log_message("Disconnected", 'Info')
 
         # self.currnet_state = self.State.UNKNOWN
         # self.currnet_state = self.State.UNKNOWN
