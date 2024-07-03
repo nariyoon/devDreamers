@@ -489,7 +489,7 @@ def send_float(number):
     return uint32_val
 
 def compareCoordinate(lastPan, lastTilt, pan, tilt):
-    print(lastPan, " ", pan, " ", lastTilt, " ", tilt)
+    #print(lastPan, " ", pan, " ", lastTilt, " ", tilt)
 
     x = abs(lastPan - pan)
     y = abs(lastTilt - tilt)
@@ -540,6 +540,6 @@ def getTargetStage(area):
 def stopAutoEngageMode():
     global autoEngageStop
 
-    if autoEngageStop == False:
+    if autoEngageStop == False and getTargetStatus() != TARGET_NONE:
         autoEngageStop = True
         sendTextToUIFoundLabel10()
