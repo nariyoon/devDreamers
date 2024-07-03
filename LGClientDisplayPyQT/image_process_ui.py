@@ -71,7 +71,7 @@ class ImageProcessingThread(QThread):
                     # Draw boxes from box_info
                     targetNum = getTargetNum()
                     targetStatus = getTargetStatus()
-                    if targetStatus == 3:
+                    if targetStatus >= 2:
                         self.prev_data = []
 
                     try:

@@ -21,11 +21,10 @@ def common_start(ip, port, shutdown_event, form_instance):
     processing_thread = threading.Thread(target=image_processing_thread, args=(frame_stack, shutdown_event, form_instance))
     processing_thread.start()
 
-    # 스레드가 완료될 때까지 대기
-    armed_thread.join()
-    tcp_thread.join()
     # frame_stack.put(None)  # 종료 신호
     processing_thread.join()
+    tcp_thread.join()
+    armed_thread.join()
 
 	# 정리 작업 수행
     print("Common thread is closed successfully.")

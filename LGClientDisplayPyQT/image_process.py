@@ -68,10 +68,15 @@ class ImageFilter:
     def __init__(self, name):
         self.name = name
 
+    def apply_no_filter(self, image):
+        # Do nothing, return the original image
+        return image
+
     def apply_custom_sharpening_filter(self, image):
-        kernel = np.array([[0, -0.5, 0],
-                           [-0.5, 3, -0.5],
-                           [0, -0.5, 0]])
+        # 강한 샤프닝 효과를 주는 커널
+        kernel = np.array([[0, -1, 0],
+                           [-1, 5, -1],
+                           [0, -1, 0]])
         sharpened_image = cv2.filter2D(image, -1, kernel)
         return sharpened_image
 
@@ -85,7 +90,7 @@ class ImageFilter:
         sharpened = cv2.addWeighted(image, 1 + amount, blurred, -amount, 0)
         return sharpened
 
-    def adjust_brightness(self, image, beta_value):
+    def adjust_brightness(self, image, beta_value=100):
         # Adjust the brightness by adding the beta_value to all pixels
         brightened_image = cv2.convertScaleAbs(image, alpha=1, beta=beta_value)
         return brightened_image
@@ -95,6 +100,10 @@ class ImageFilter:
 
 def init_filter_models():
     models = []
+
+    no_filter = ImageFilter("No Filter")
+    models.append(no_filter)
+    print(f"{no_filter.get_name()} init done")
 
     custom_filter = ImageFilter("Custom Sharpening Filter")
     models.append(custom_filter)
@@ -113,6 +122,30 @@ def init_filter_models():
     print(f"{brightness_filter.get_name()} init done")
 
     return models
+
+def add_image_filter(image):
+    imageMat = cv2.imdecode(np.frombuffer(image, dtype=np.uint8), cv2.IMREAD_COLOR)
+    filter_model = get_curr_filter()
+
+    if filter_model.name == "No Filter":
+        filtered_image = filter_model.apply_no_filter(imageMat)
+    elif filter_model.name == "Custom Sharpening Filter":
+        filtered_image = filter_model.apply_custom_sharpening_filter(imageMat)
+    elif filter_model.name == "Laplacian Sharpening":
+        filtered_image = filter_model.apply_laplacian_sharpening(imageMat)
+    elif filter_model.name == "Unsharp Mask":
+        filtered_image = filter_model.apply_unsharp_mask(imageMat)
+    elif filter_model.name == "Brightness Adjustment":
+        filtered_image = filter_model.adjust_brightness(imageMat, beta_value=50)
+
+    _, buffer = cv2.imencode('.jpg', filtered_image)
+    buffer = buffer.tobytes()
+
+    len_ = len(buffer)
+    type_ = 3  # type은 3
+    packedData = struct.pack(f'>II{len_}s', len_, type_, buffer)
+
+    return packedData, filtered_image
 
 
 result_data = None
@@ -141,7 +174,7 @@ def init_image_processing_model():
     image = cv2.resize(image, (CAP_PROP_FRAME_WIDTH, CAP_PROP_FRAME_HEIGHT))
 
     # YOLOv8 model
-    yolo_model_path = f"{script_dir}/image_algo/models/best_17.pt"
+    yolo_model_path = f"{script_dir}/image_algo/models/best_18.pt"
     yolo_model = YOLOAlgorithm(yolo_model_path)
     yolo_model.detector.model.to(torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
     yolo_model.detect(image)
@@ -228,7 +261,6 @@ def flush_queue(q):
             break  # 큐가 비어있으면 반복 종료 Queue.empty()
 
 
-
 def image_processing_thread(QUEUE, shutdown_event, form_instance):
     DATA = {}
     debug_folder = "debug"
@@ -244,7 +276,6 @@ def image_processing_thread(QUEUE, shutdown_event, form_instance):
     # p.nice(-20)  # 이 값을 적절히 조정하세요
 
 
-
     target_status = {}
     disappearance_threshold = 3
     movement_threshold = 5
@@ -252,14 +283,14 @@ def image_processing_thread(QUEUE, shutdown_event, form_instance):
 
     while not shutdown_event.is_set():
         try:
-            frame, targetStatus, targetNum = QUEUE.get(timeout=1)
+            imageMat, targetStatus, targetNum = QUEUE.get(timeout=1)
 
             # print(f"targetStatus {targetStatus} targetNum {targetNum}")
 
             if targetStatus == 3:
                 continue
 
-            imageMat = cv2.imdecode(np.frombuffer(frame, dtype=np.uint8), cv2.IMREAD_COLOR)
+            # imageMat = cv2.imdecode(np.frombuffer(imageMat, dtype=np.uint8), cv2.IMREAD_COLOR)
 
             models = form_instance.get_img_model()
             if models is None:
@@ -277,7 +308,7 @@ def image_processing_thread(QUEUE, shutdown_event, form_instance):
                 height = y2 - y1
                 area = height * height
                 # print(f"label {label} area {area}")
-                if width < 20 or height < 20 or width > 100 or height > 100:
+                if width < 20 or height < 20 or width > 150 or height > 150:
                     continue
 
                 center_x = (x1 + x2) / 2
@@ -330,22 +361,22 @@ def image_processing_thread(QUEUE, shutdown_event, form_instance):
 
                     save_target_status(target_status)
 
-            # image = cv2.cvtColor(imageMat, cv2.COLOR_BGR2RGB)
-            # results = hands.process(image)
-            # if results.multi_hand_landmarks:
-            #     for hand_landmarks in results.multi_hand_landmarks:
-            #         x_min, y_min = float('inf'), float('inf')
-            #         x_max, y_max = float('-inf'), float('-inf')
-            #         for landmark in hand_landmarks.landmark:
-            #             x, y = int(landmark.x * image.shape[1]), int(landmark.y * image.shape[0])
-            #             x_min, y_min = min(x_min, x), min(y_min, y)
-            #             x_max, y_max = max(x_max, x), max(y_max, y)
+            image = cv2.cvtColor(imageMat, cv2.COLOR_BGR2RGB)
+            results = hands.process(image)
+            if results.multi_hand_landmarks:
+                for hand_landmarks in results.multi_hand_landmarks:
+                    x_min, y_min = float('inf'), float('inf')
+                    x_max, y_max = float('-inf'), float('-inf')
+                    for landmark in hand_landmarks.landmark:
+                        x, y = int(landmark.x * image.shape[1]), int(landmark.y * image.shape[0])
+                        x_min, y_min = min(x_min, x), min(y_min, y)
+                        x_max, y_max = max(x_max, x), max(y_max, y)
 
-            #         box_info.append({
-            #             "label": "10",
-            #             "bbox": [x_min, y_min, x_max, y_max],
-            #             "center": [(x_min + x_max) / 2, (y_min + y_max) / 2],
-            #         })
+                    box_info.append({
+                        "label": "10",
+                        "bbox": [x_min, y_min, x_max, y_max],
+                        "center": [(x_min + x_max) / 2, (y_min + y_max) / 2],
+                    })
 
             DATA['target_info'] = target_info
 

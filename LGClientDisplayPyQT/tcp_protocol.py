@@ -4,7 +4,7 @@ import struct
 import errno
 import cv2
 import numpy as np
-from image_process import get_result_model, get_init_status, init_model_image
+from image_process import get_result_model, get_init_status, init_model_image, add_image_filter
 from queue import Queue, Full
 import os
 from queue import LifoQueue
@@ -182,9 +182,12 @@ def tcp_ip_thread(ip, port, shutdown_event):
                 #   frame_queue.get()
                 # frame_queue.put(image_buffer)                
 
+                # Add Image Filter
+                packedData, filtered_image = add_image_filter(image_buffer)
+
                 if frame_stack.full():
                     frame_stack.get()
-                frame_stack.put((image_buffer, targetStatus, targetNum))
+                frame_stack.put((filtered_image, targetStatus, targetNum))
 
                 # init_model_status = get_init_status()
 

@@ -25,3 +25,12 @@ class OverwritingQueue(Queue):
 target_queue = OverwritingQueue(maxsize=1)
 box_queue = OverwritingQueue(maxsize=1)
 fps_queue = OverwritingQueue(maxsize=1)
+
+filter_index = None
+def set_curr_filter(data):
+    global filter_index
+    filter_index = data
+
+def get_curr_filter():
+    global filter_index
+    return filter_index

@@ -22,6 +22,7 @@ import os
 import qdarktheme
 from image_process import get_result_model
 import time
+from cannon_queue import *
 
 # O1 : 192.168.0.224
 # S3 : 192.168.0.238
@@ -150,6 +151,9 @@ class DevWindow(QMainWindow):
         # Define img filters to expand extensibility
         self.img_filter_global = init_filter_models()
         self.selected_filter = self.img_filter_global[0]
+        set_curr_filter(self.selected_filter)
+        filter_lenght = len(self.img_filter_global)
+        print(f"filter_lenght {filter_lenght}")
 
         # Starting the Image Processing Thread
         self.image_processing_thread = ImageProcessingThread()
@@ -518,11 +522,12 @@ class DevWindow(QMainWindow):
             
     @pyqtSlot(int)
     def on_combobox_changed_imgfilter(self, index):
-        if 0 <= index < len(self.img_model_global):
+        if 0 <= index < len(self.img_filter_global):
             self.selected_filter = self.img_filter_global[index]
             filter_name = self.selected_filter.get_name()
             self.filter_changed.emit(filter_name)
             print(f"Img filter selected: {self.img_filter_global[index].get_name()}")
+            set_curr_filter(self.selected_filter)
             # # print(f"on_combobox_changed_algorithm... SELECTED: {self.img_model_global[index].get_name()}")
         else:
             print("Invalid index or image filter list is empty")
