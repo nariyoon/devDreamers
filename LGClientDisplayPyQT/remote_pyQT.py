@@ -1174,8 +1174,8 @@ class DevWindow(QMainWindow):
         #     print("Server check failed, will retry in 10 seconds.")
 
     def PrearmedCheckTimer_event(self):
-        if self.RcvStateCurr != MT_PREARM:
-            self.log_message("Pre-armed password is not correct.")
+        if self.RcvStateCurr != ST_PREARMED:
+            self.log_message("Pre-armed password is not correct.", 'Error')
         self.PrearmedCheckTimer.stop()
 
     def check_server(self, ip, port):
